@@ -8,37 +8,88 @@ Graduation project integrating IoT devices, MQTT, backend, and web dashboard.
 graduation-project/
 ├── iot/
 │   ├── firmware/
+│   │   ├── smart-door-lock/
+│   │   ├── smart-speaker/
+│   │   ├── window-sensor/
+│   │   ├── smart-plug/
+│   │   └── environment-sensor/
 │   ├── mqtt/
 │   └── config/
 ├── backend/
+│   ├── shared/
+│   └── modules/
+│       ├── smart-door-lock/
+│       ├── smart-speaker/
+│       ├── window-sensor/
+│       ├── smart-plug/
+│       └── environment-sensor/
 ├── frontend/
+│   ├── shared/
+│   └── features/
+│       ├── smart-door-lock/
+│       ├── smart-speaker/
+│       ├── window-sensor/
+│       ├── smart-plug/
+│       └── environment-sensor/
 └── docs/
 ```
 
-## Current phase
+## Module ownership
 
-The IoT devices already work locally/offline. The next milestones are:
+| Member | Module |
+|---|---|
+| Thành | Smart Door Lock |
+| Lộc | Smart Speaker / Central Control |
+| Minh | Window Sensor |
+| Nhật Anh | Smart Plug |
+| Quỳnh | Smoke / Gas / Temperature Sensor |
 
-1. Push the current working firmware as the baseline.
-2. Add Wi-Fi connectivity.
-3. Add MQTT communication.
-4. Integrate devices with the smart speaker / central controller.
-5. Add backend and web dashboard.
-6. Run end-to-end integration testing.
+Each member owns the vertical slice of their module across IoT, backend, and frontend.
 
-## Team workflow
-
-- `main`: stable, reviewed code.
-- Each member works on a feature/device branch.
-- Changes should be merged through Pull Requests.
-- Never commit passwords, tokens, API keys, or Wi-Fi credentials.
-
-## Commit examples
+## Branch model
 
 ```text
-feat(light): add working offline firmware
-feat(light): add wifi connectivity
-feat(light): add mqtt control
-fix(trash): fix servo rotation
-docs(mqtt): update topic registry
+main
+└── integration
+    ├── module/smart-door-lock
+    ├── module/smart-speaker
+    ├── module/window-sensor
+    ├── module/smart-plug
+    └── module/environment-sensor
 ```
+
+Shared or cross-cutting work uses short-lived branches such as:
+
+```text
+feature/login
+feature/main-dashboard
+feature/navbar
+feature/mqtt-core
+fix/<name>
+docs/<name>
+```
+
+These merge into `integration`, then stable integrated code is merged into `main`.
+
+See `docs/branch-strategy.md` for the complete workflow.
+
+## Current development flow
+
+1. Keep current working IoT firmware as a baseline.
+2. Add Wi-Fi connectivity.
+3. Add MQTT communication.
+4. Integrate devices with the Smart Speaker / central controller.
+5. Implement backend modules and shared services.
+6. Implement frontend features and shared UI.
+7. Test end-to-end on `integration`.
+8. Merge demo-ready code to `main`.
+
+## Security
+
+Never commit:
+- Wi-Fi passwords
+- MQTT credentials
+- API keys
+- tokens
+- database passwords
+- private certificates
