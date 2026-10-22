@@ -1,5 +1,9 @@
 # Kết quả kiểm tra firmware
 
+## AS608 retry — 2026-10-22
+
+Sau khi người dùng khôi phục quyền, bo báo `FP OFFLINE`; tác vụ cũ chỉ thử `verifyPassword()` một lần rồi dừng. Đã cho tác vụ vân tay thử lại mỗi khoảng 2 giây mà không chặn xử lý cửa, thêm `VERSION` và trạng thái `FP/wipePending/busy` trong `STATUS`. `platformio run --environment smartdoor_s3_n16r8` trên source mới đã **SUCCESS**: RAM tĩnh 21.788/327.680 byte (6,6%), flash 393.617/6.553.600 byte (6,0%). Chưa thử bản retry mới trên bo; `FP OFFLINE` kéo dài vẫn cần kiểm tra nguồn và dây UART thực tế.
+
 Cập nhật 2026-10-22: người dùng xác nhận bản firmware hiện tại đã nạp và chạy được trên bo. Xác nhận này không thay thế kết quả riêng cho từng mục trong checklist phần cứng. Các đoạn “chưa thử trên mạch” bên dưới ghi lại trạng thái tại thời điểm từng bản sửa được tạo; chúng không mô tả trạng thái mới nhất của toàn bộ project.
 
 ## Sửa firmware ngày 2026-10-22

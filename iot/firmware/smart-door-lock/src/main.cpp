@@ -11,6 +11,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+constexpr char FW_VERSION[]="SDL-FP-RETRY-20261022-C";
 // All times use unsigned subtraction, safe across millis() rollover.
 constexpr uint8_t CDS=1, EXIT=2, BUZZER=3, VIBRATION=4, DOOR=7, SERVO=8;
 constexpr uint8_t ROWS[]={38,39,40,41}, COLS[]={42,47,21};
@@ -351,7 +352,14 @@ bool fpWaitImage(uint8_t expected,uint32_t timeout) {
 }
 void fingerprintTask(void*) {
   finger.begin(57600);
-  if(!finger.verifyPassword()) {fpSend(-2); vTaskDelete(nullptr); return;}
+  // AS608 may boot after the ESP32 or be reconnected while the door stays powered.
+  // Keep retrying in this separate task; local unlock and inside button remain live.
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  bool offlineReported=false;
+  while(!finger.verifyPassword()) {
+    if(!offlineReported) {fpSend(-2); offlineReported=true;}
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
   if(fpWipeRequired) {
     // This flag is set only by a confirmed local recovery command.
     if(finger.emptyDatabase()!=FINGERPRINT_OK) {fpSend(-9); vTaskDelete(nullptr); return;}
@@ -383,6 +391,7 @@ void fingerprintTask(void*) {
 }
 void serialCommand(String cmd) {
   cmd.trim();
+  if(cmd=="VERSION") {Serial.println(FW_VERSION); return;}
   if(cmd=="RESET AUTH") {
     if(!storageOK || exitButton.value || digitalRead(EXIT)) {
       resetArmed=false; note("HOLD INSIDE TO RESET");
@@ -418,6 +427,7 @@ void serialCommand(String cmd) {
   if(cmd=="STATUS") {
     Serial.printf("door=%s bolt=%u known=%u PWM=%u PIN=%u cards=%u FS=%u NVS=%u\n",
       door.value?"OPEN":"CLOSED",unsigned(bolt),servoKnown,servoReady,pinSet,cards.count,fsOK,storageOK);
+    Serial.printf("FP=%u wipePending=%u busy=%u\n",fpOnline,fpWipeRequired,fpBusy);
     Serial.printf("OLED=%u addr=0x%02X probe3C=%u probe3D=%u SDA=5 SCL=6 I2C=100k\n",
       oledOK,oledAddress,oledProbe3C,oledProbe3D);
     Serial.printf("driver=%s postInit=%u\n",useSH1106?"SH1106":"SSD1306",oledPostInit); return;
@@ -583,6 +593,7 @@ void setup() {
 #else
   Serial.begin(115200,SERIAL_8N1,44,43);
 #endif
+  Serial.println(FW_VERSION);
   servoReady=ledcSetup(0,50,SERVO_PWM_BITS)>0;
   if(servoReady) {ledcAttachPin(SERVO,0); ledcWrite(0,0);}
   Wire.begin(5,6); Wire.setClock(100000); Wire.setTimeOut(20);

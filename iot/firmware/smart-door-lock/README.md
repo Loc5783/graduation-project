@@ -2,6 +2,8 @@
 
 Project PlatformIO Arduino cho phần khóa cửa chạy độc lập. Mở chính thư mục này bằng VS Code/PlatformIO. Người dùng đã xác nhận bản firmware này chạy được trên bo ESP32-S3 của mình; mức độ đã thử của từng mục phần cứng xem ghi chú cuối tài liệu. Chưa có Wi-Fi/MQTT, backend hay điều khiển từ web.
 
+Bản hiện tại trả `SDL-FP-RETRY-20261022-C` cho lệnh `VERSION` trong Serial Monitor. AS608 được thử kết nối lại mỗi khoảng 2 giây trong tác vụ riêng nếu chưa phản hồi khi ESP32 khởi động. `STATUS` có thêm `FP`, `wipePending` và `busy`. Sau `RESET AUTH`, chỉ đăng ký vân tay mới khi đã thấy `OLD FINGERS CLEARED`, `FP READY` và `STATUS` báo `FP=1 wipePending=0 busy=0`. Nếu `FP=0` kéo dài, kiểm tra nguồn/GND và TX cảm biến → GPIO18, RX cảm biến ← GPIO17; không cần lặp lại `RESET AUTH`.
+
 ## 1. Phần cứng giữ nguyên
 
 | Thiết bị | Kết nối |
