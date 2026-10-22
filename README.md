@@ -71,6 +71,18 @@ docs/<name>
 
 These merge into `integration`, then stable integrated code is merged into `main`.
 
+## Web application available on integration
+
+The React frontend and Express/MongoDB authentication backend are now implemented.
+See [local setup](docs/run-local.md) for installation, environment configuration, tests,
+and the two-terminal startup workflow.
+
+The active frontend module code is in `frontend/src/modules/<device-id>/`.
+The original `frontend/features/` folders remain as planning placeholders; they are
+not imported by the running application. Backend device modules and IoT firmware
+folders are preserved for the corresponding owners. MQTT/Hub integration is pending;
+frontend device metadata and topics are proposals, not proof of hardware support.
+
 See `docs/branch-strategy.md` for the complete workflow.
 
 ## Current development flow

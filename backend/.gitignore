@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Environment files (Loại trừ toàn bộ biến thể .env, chỉ giữ .env.example)
+.env
+.env.*
+!.env.example
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db

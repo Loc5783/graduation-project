@@ -15,6 +15,11 @@ Each module branch may contain changes across:
 - `backend/modules/<module>/`
 - `frontend/features/<module>/`
 
+Implementation note: the running React application's module directory is now
+`frontend/src/modules/<module>/`. Use that directory for current frontend work;
+`frontend/features/<module>/` remains the original planning placeholder. Sync the
+latest `integration` before starting so the shared authentication/layout is present.
+
 ## Short-lived branches
 
 Use these for work that is not owned by one device module:

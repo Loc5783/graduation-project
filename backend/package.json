@@ -1,0 +1,37 @@
+{
+  "name": "smart-home-privacy-dashboard-backend",
+  "version": "0.1.0",
+  "description": "Backend API xác thực và kết nối MongoDB cho Smart Home Privacy Dashboard",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "smarthome",
+    "privacy",
+    "express",
+    "mongodb",
+    "session"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-mongo": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "express-session": "^1.19.0",
+    "mongoose": "^9.11.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1",
+    "vitest": "^5.0.5"
+  }
+}

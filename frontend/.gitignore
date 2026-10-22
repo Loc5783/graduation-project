@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Production build
+dist/
+dist-ssr/
+
+# Environment files (Loại trừ toàn bộ biến thể .env, giữ lại .env.example)
+.env
+.env.*
+!.env.example
+
+# Logs and caches
+*.log
+.eslintcache
+.system_generated
+
+# Editor & OS files
+*.local
+.DS_Store
+Thumbs.db
+Desktop.ini
