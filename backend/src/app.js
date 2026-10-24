@@ -8,6 +8,8 @@ import User from './models/User.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
+import { SmartDoorLockTelemetry } from '../modules/smart-door-lock/telemetry.js';
+import { createSmartDoorLockRouter } from '../modules/smart-door-lock/router.js';
 
 /**
  * Khởi tạo ứng dụng Express và cấu hình các middleware an toàn
@@ -98,6 +100,11 @@ export async function createApp(options = {}) {
   // 5. Mount các route xác thực
   const authRouter = options.authRouter || createAuthRouter(options);
   app.use('/api/auth', authRouter);
+
+  // Smart Door Lock is isolated from the other device modules and exposes read-only data.
+  const doorTelemetry = options.smartDoorLockTelemetry || new SmartDoorLockTelemetry();
+  app.locals.smartDoorLockTelemetry = doorTelemetry;
+  app.use('/api/smart-door-lock', createSmartDoorLockRouter(doorTelemetry, options.smartDoorLockOptions));
 
   // 6. Xử lý đường dẫn không tồn tại (404 Handler)
   app.use((req, res) => {

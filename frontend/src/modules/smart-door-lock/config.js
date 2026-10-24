@@ -1,7 +1,7 @@
 /**
  * Cấu hình thiết bị: Khóa cửa thông minh
  * Người phụ trách: Thành (thanh)
- * Lưu ý: Đây là cấu hình DEMO giả định, chưa đối chiếu backend chính thức.
+ * Dữ liệu trực tiếp được lấy qua API có xác thực và MQTT phía máy chủ.
  */
 export const smartDoorLockConfig = {
   id: 'smart-door-lock',
@@ -29,14 +29,27 @@ export const smartDoorLockConfig = {
     },
     {
       key: 'lock_state',
-      label: 'Trạng thái chốt khóa vật lý',
+      label: 'Lệnh điều khiển servo khóa',
+      sensitivity: 'medium',
+      enabled: true,
+      description: 'Lệnh điều khiển servo và trạng thái hoàn tất; chưa có cảm biến xác nhận vị trí chốt khóa vật lý.'
+    },
+    {
+      key: 'door_contact',
+      label: 'Trạng thái tiếp điểm cửa MC38',
       sensitivity: 'medium',
       enabled: true
     },
     {
-      key: 'battery_level',
-      label: 'Dung lượng pin thiết bị',
-      sensitivity: 'low',
+      key: 'sensor_signals',
+      label: 'Tín hiệu rung, ánh sáng và nút bên trong',
+      sensitivity: 'medium',
+      enabled: true
+    },
+    {
+      key: 'peripheral_health',
+      label: 'Tình trạng đầu đọc, bàn phím và bộ nhớ thiết bị',
+      sensitivity: 'medium',
       enabled: true
     }
   ],
