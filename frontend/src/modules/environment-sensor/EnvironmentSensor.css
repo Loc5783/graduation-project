@@ -1,0 +1,289 @@
+.env-dashboard {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  font-family: inherit;
+}
+
+.env-hero-banner {
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.env-hero-banner.level-safe {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.05));
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #065f46;
+}
+
+.env-hero-banner.level-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.06));
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #92400e;
+}
+
+.env-hero-banner.level-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(220, 38, 38, 0.08));
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #991b1b;
+  animation: pulse-danger 2s infinite;
+}
+
+.env-hero-banner.level-warmup {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.05));
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #1e40af;
+}
+
+.env-hero-banner.level-offline {
+  background: rgba(107, 114, 128, 0.1);
+  border-color: rgba(107, 114, 128, 0.25);
+  color: #4b5563;
+}
+
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.env-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.env-hero-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.env-hero-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+}
+
+.env-hero-desc {
+  font-size: 0.875rem;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.env-connection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.env-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.env-dot.online { background-color: #10b981; box-shadow: 0 0 6px #10b981; }
+.env-dot.offline { background-color: #ef4444; }
+
+/* Grid of Metrics */
+.env-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.env-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.env-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+}
+
+.env-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.env-card-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin: 0;
+}
+
+.env-card-glyph {
+  font-size: 1.3rem;
+  opacity: 0.8;
+}
+
+.env-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0.25rem 0;
+  line-height: 1.2;
+}
+
+.env-card-value.warn { color: #d97706; }
+.env-card-value.danger { color: #dc2626; }
+.env-card-value.safe { color: #059669; }
+
+.env-card-sub {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Gas Level Meter */
+.env-meter-container {
+  margin-top: 0.75rem;
+}
+
+.env-meter-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.env-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.env-meter-markers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+/* Activity & Protection Section */
+.env-two-column {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 860px) {
+  .env-two-column {
+    grid-template-columns: 1fr;
+  }
+}
+
+.env-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.env-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 0.75rem;
+}
+
+.env-panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.env-event-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.env-event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 0.825rem;
+}
+
+.env-event-item.is-alert {
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+
+.env-event-item.is-warn {
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+}
+
+.env-event-code {
+  font-weight: 600;
+  color: #111827;
+}
+
+.env-event-time {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.env-empty-events {
+  padding: 1.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.env-hardware-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.env-info-row {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.env-info-label { color: #6b7280; }
+.env-info-value { font-weight: 600; color: #1f2937; }
+

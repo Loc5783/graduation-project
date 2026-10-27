@@ -8,6 +8,8 @@ import User from './models/User.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
+import { EnvironmentSensorTelemetry } from '../modules/environment-sensor/telemetry.js';
+import { createEnvironmentSensorRouter } from '../modules/environment-sensor/router.js';
 
 /**
  * Khởi tạo ứng dụng Express và cấu hình các middleware an toàn
@@ -98,6 +100,11 @@ export async function createApp(options = {}) {
   // 5. Mount các route xác thực
   const authRouter = options.authRouter || createAuthRouter(options);
   app.use('/api/auth', authRouter);
+
+  // Module Cảm biến môi trường (Environment Sensor)
+  const envTelemetry = options.environmentSensorTelemetry || new EnvironmentSensorTelemetry();
+  app.locals.environmentSensorTelemetry = envTelemetry;
+  app.use('/api/environment-sensor', createEnvironmentSensorRouter(envTelemetry, options.environmentSensorOptions));
 
   // 6. Xử lý đường dẫn không tồn tại (404 Handler)
   app.use((req, res) => {
