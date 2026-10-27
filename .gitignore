@@ -18,6 +18,7 @@ yarn-error.log*
 *.bin
 *.elf
 *.map
+iot/firmware/window-sensor/wifi_secrets.h
 
 # Arduino / temporary
 *.hex
