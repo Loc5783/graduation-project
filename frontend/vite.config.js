@@ -15,6 +15,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: []
+    setupFiles: ['./src/tests/setup.js'],
+    env: {
+      VITE_PREVIEW_MODE: 'false'
+    }
   }
 });

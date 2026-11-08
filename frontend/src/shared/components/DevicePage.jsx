@@ -7,7 +7,7 @@ import { getDeviceIcon } from './AuthIcons.jsx';
  * Cung cấp thông tin nhận diện cơ bản của thiết bị và vị trí chèn OwnerArea
  * để từng thành viên phát triển tính năng độc lập.
  */
-export default function DevicePage({ config, ownerArea }) {
+export default function DevicePage({ config, ownerArea, hideHeader = false }) {
   const { t } = useLanguage();
 
   if (!config) {
@@ -26,7 +26,10 @@ export default function DevicePage({ config, ownerArea }) {
   return (
     <div className="device-page-container">
       {/* Header thiết bị */}
-      <header className="device-page-header">
+      <header
+        className="device-page-header"
+        style={hideHeader ? { display: 'none' } : undefined}
+      >
         <div className="device-header-main">
           <div className="device-title-wrap">
             <span className="device-title-icon" aria-hidden="true">

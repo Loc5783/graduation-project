@@ -126,9 +126,10 @@ describe('Giai đoạn 1: Kiểm thử nền tảng, module, dữ liệu seed, R
         expect(config).toBeDefined();
         expect(config.owner).toBe(expected.owner);
         expect(config.mqtt).toBeDefined();
-        expect(config.mqtt.command).toBe(`home/${expected.id}/command`);
-        expect(config.mqtt.status).toBe(`home/${expected.id}/status`);
-        expect(config.mqtt.telemetry).toBe(`home/${expected.id}/telemetry`);
+        const isSmartPlug = expected.id === 'smart-plug';
+        expect(config.mqtt.command).toBe(isSmartPlug ? 'shp/device-smart-plug-01/command' : `home/${expected.id}/command`);
+        expect(config.mqtt.status).toBe(isSmartPlug ? 'shp/device-smart-plug-01/status' : `home/${expected.id}/status`);
+        expect(config.mqtt.telemetry).toBe(isSmartPlug ? 'shp/device-smart-plug-01/telemetry' : `home/${expected.id}/telemetry`);
       });
     });
 

@@ -10,9 +10,9 @@ export const smartPlugConfig = {
   owner: 'Nhật Anh',
   icon: 'plug',
   mqtt: {
-    command: 'home/smart-plug/command',
-    status: 'home/smart-plug/status',
-    telemetry: 'home/smart-plug/telemetry'
+    command: 'shp/device-smart-plug-01/command',
+    status: 'shp/device-smart-plug-01/status',
+    telemetry: 'shp/device-smart-plug-01/telemetry'
   },
   dataTypes: [
     {
