@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
+import UserSession from '../models/UserSession.js';
+import parseUserAgent from '../utils/userAgentParser.js';
 
 // Hash mẫu định dạng bcrypt hợp lệ dùng để ngăn chặn tấn công Timing Attack khi không tìm thấy user
 const DUMMY_HASH = '$2b$10$mZx5eYBEFGMl8F8kHFsCE.fRS0THTVp5US0ZRgsrN1yDhwEKfTEj6';
@@ -177,20 +180,68 @@ export async function login(req, res, next) {
     }
 
     // Tái tạo session ID mới (Regenerate session) để ngăn chặn Session Fixation
-    req.session.regenerate((err) => {
+    req.session.regenerate(async (err) => {
       if (err) {
         return next(err);
       }
 
       req.session.userId = user._id.toString();
+      req.session.authVersion = typeof user.authVersion === 'number' ? user.authVersion : 0;
 
       // Cấu hình thời hạn phiên: 14 ngày nếu ghi nhớ, mặc định 1 ngày
       const maxAge = isRemember ? 14 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
       req.session.cookie.maxAge = maxAge;
 
+      // Sinh mã quản lý phiên công khai (Public Session ID)
+      const publicSessionId = crypto.randomUUID();
+      req.session.managedSessionId = publicSessionId;
+
+      // Trích xuất thông tin thiết bị và trình duyệt từ User-Agent
+      const { deviceLabel, browserLabel } = parseUserAgent(req.headers['user-agent']);
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + maxAge);
+
+      // Lưu bản ghi metadata phiên vào UserSession (Session Registry)
+      try {
+        await UserSession.create({
+          sessionId: publicSessionId,
+          userId: user._id,
+          sessionStoreId: req.sessionID,
+          authVersion: req.session.authVersion,
+          deviceLabel,
+          browserLabel,
+          createdAt: now,
+          lastActiveAt: now,
+          expiresAt,
+          isRevoked: false
+        });
+      } catch (metaErr) {
+        console.error('[Session Error] Lỗi lưu metadata phiên mới khi đăng nhập:', metaErr.message);
+        if (req.session) {
+          try {
+            req.session.destroy(() => {});
+          } catch {
+            // ignore
+          }
+        }
+        res.clearCookie('shp_sid', {
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production'
+        });
+        return next(metaErr);
+      }
+
       // Lưu phiên vào MongoDB store trước khi gửi phản hồi cho client
-      req.session.save((saveErr) => {
+      req.session.save(async (saveErr) => {
         if (saveErr) {
+          // Nếu lưu store thất bại, dọn dẹp bản ghi metadata vừa tạo để không tồn tại phiên ma
+          try {
+            await UserSession.deleteOne({ sessionId: publicSessionId });
+          } catch {
+            // ignore
+          }
           return next(saveErr);
         }
 
@@ -253,6 +304,28 @@ export async function logout(req, res) {
       success: true,
       message: 'Đã đăng xuất thành công.'
     });
+  }
+
+  // Đánh dấu thu hồi phiên trong UserSession (nếu có bản ghi)
+  if (req.session.managedSessionId) {
+    try {
+      await UserSession.updateOne(
+        { sessionId: req.session.managedSessionId },
+        { $set: { isRevoked: true, revokedAt: new Date() } }
+      );
+    } catch (err) {
+      console.error('[Session Error] Lỗi đánh dấu thu hồi khi logout:', err.message);
+    }
+  } else if (req.sessionID) {
+    // Trường hợp phiên legacy
+    try {
+      await UserSession.updateMany(
+        { sessionStoreId: req.sessionID },
+        { $set: { isRevoked: true, revokedAt: new Date() } }
+      );
+    } catch (err) {
+      console.error('[Session Error] Lỗi đánh dấu thu hồi session legacy khi logout:', err.message);
+    }
   }
 
   req.session.destroy((err) => {

@@ -139,7 +139,7 @@ export async function apiRequest(endpoint, options = {}) {
 
 /**
  * Gửi yêu cầu đăng ký tài khoản mới (POST /api/auth/register)
- *
+ * 
  * @param {object} params
  * @param {string} params.fullName Họ và tên
  * @param {string} params.email Địa chỉ email
@@ -182,7 +182,7 @@ export async function registerService({ fullName, email, password } = {}, option
 
 /**
  * Gửi yêu cầu đăng nhập tài khoản (POST /api/auth/login)
- *
+ * 
  * @param {object} params
  * @param {string} params.email Địa chỉ email
  * @param {string} params.password Mật khẩu (không trim)
@@ -225,7 +225,7 @@ export async function loginService({ email, password, remember = false } = {}, o
 
 /**
  * Kiểm tra và lấy thông tin phiên làm việc hiện tại (GET /api/auth/me)
- *
+ * 
  * @param {object} [options] Tùy chọn mở rộng cho request
  */
 export async function getMeService(options = {}) {
@@ -257,7 +257,7 @@ export async function getMeService(options = {}) {
  * Gửi yêu cầu đăng xuất và hủy phiên làm việc (POST /api/auth/logout)
  * Bắt buộc gửi Content-Type: application/json và body rỗng {}
  * Không bắt buộc phải có data.user.
- *
+ * 
  * @param {object} [options] Tùy chọn mở rộng cho request
  */
 export async function logoutService(options = {}) {
@@ -281,12 +281,12 @@ export async function logoutService(options = {}) {
 
 /**
  * Kiểm tra xem ứng dụng có đang ở chế độ xem trước nội bộ (Preview Mode) hay không.
- *
+ * 
  * YÊU CẦU AN TOÀN:
  * 1. Đang chạy trong môi trường phát triển (Development / DEV).
  * 2. Cờ cấu hình VITE_PREVIEW_MODE='true'.
  * Bản build Production (PROD) tuyệt đối TẮT cơ chế xem trước.
- *
+ * 
  * @param {object} [env=import.meta.env] Đối tượng môi trường để kiểm tra (hỗ trợ kiểm thử)
  * @returns {boolean}
  */

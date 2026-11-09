@@ -25,4 +25,30 @@ export function createAuthRateLimiter(options = {}) {
 }
 
 export const authRateLimiter = createAuthRateLimiter();
+
+/**
+ * Tạo middleware giới hạn tần suất yêu cầu đổi mật khẩu (POST /api/account/change-password).
+ * Ngăn chặn brute-force mật khẩu cũ hoặc DoS tài nguyên CPU do thuật toán bcrypt.
+ */
+export function createChangePasswordRateLimiter(options = {}) {
+  const windowMs = options.windowMs || (process.env.CHANGE_PASSWORD_RATE_LIMIT_WINDOW_MS ? parseInt(process.env.CHANGE_PASSWORD_RATE_LIMIT_WINDOW_MS, 10) : 15 * 60 * 1000);
+  const max = options.max || (process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX ? parseInt(process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX, 10) : (process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 10));
+
+  return rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.status(429).json({
+        success: false,
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Bạn đã thử đổi mật khẩu quá nhiều lần. Vui lòng thử lại sau ít phút.'
+      });
+    },
+    ...options
+  });
+}
+
+export const changePasswordRateLimiter = createChangePasswordRateLimiter();
 export default authRateLimiter;

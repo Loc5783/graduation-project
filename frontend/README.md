@@ -1,19 +1,40 @@
-# Frontend
+# Frontend - Smart Home Privacy Dashboard
 
-Web dashboard for monitoring and controlling IoT devices.
+Thư mục mã nguồn frontend xây dựng bằng **React 18**, **React Router 6**, **CSS thuần** (không UI library) và **Vite**.
 
-The active application is React 18 + Vite + React Router 6, JavaScript and plain CSS.
-It includes real authentication, the shared dashboard shell, VI/EN, and five independent
-device pages with empty states while hardware integration is pending.
+## Hướng dẫn nhanh cho lập trình viên
 
-From this directory, run `npm ci` and `npm run dev` after setting up the backend.
-Open `http://localhost:5173`. Use `npm run lint`, `npm test` and `npm run build` for checks.
+### 1. Cài đặt & Khởi động
+```bash
+npm install
+npm run dev
+```
 
-See [local setup](../docs/run-local.md) for complete instructions.
+### 2. Chế độ xem trước Dashboard (Preview Mode)
+Nếu cần xem trước khung layout Dashboard và các trang module mà chưa có tài khoản máy chủ:
+1. Tạo file `.env` từ `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Cập nhật giá trị:
+   ```env
+   VITE_PREVIEW_MODE=true
+   ```
+3. Chạy `npm run dev` và truy cập `/overview`.
 
-Work on `src/modules/<device-id>/OwnerArea.jsx` for device-specific UI. Shared UI lives
-in `src/shared/`, providers in `src/context/`, and API calls in `src/services/`.
-Coordinate changes to shared files and dependencies before merging.
+*Lưu ý an toàn:* Chế độ này chỉ hoạt động khi chạy máy chủ phát triển (`DEV`). Khi đóng gói Production (`npm run build`), cơ chế này luôn bị vô hiệu hóa để bảo đảm an toàn.
 
-`features/` and `shared/` at this directory's top level are original planning folders;
-the application imports code from `src/`. Do not create a second implementation there.
+### 3. Kiểm thử & Đóng gói
+```bash
+npm run lint    # Kiểm tra ESLint
+npm test        # Chạy kiểm thử tự động Vitest
+npm run build   # Đóng gói kiểm tra dist
+```
+
+### 4. Cấu trúc mã nguồn
+- `src/pages/`: Các trang chính (`Login.jsx`, `Register.jsx`, `Overview.jsx`, `NotFound.jsx`).
+- `src/modules/`: 5 module thiết bị độc lập (`smart-door-lock`, `smart-speaker`, `window-sensor`, `smart-plug`, `environment-sensor`). Mỗi module có `OwnerArea.jsx` dành riêng cho thành viên phụ trách.
+- `src/services/`: Dịch vụ xác thực (`authService.js`).
+- `src/shared/`: Layout chung (`Layout.jsx`), khung thiết bị (`DevicePage.jsx`), cấu hình chung.
+- `src/styles/`: Toàn bộ CSS thuần của ứng dụng (`main.css`).
+- `src/tests/`: Bộ kiểm thử giao diện và luồng hoạt động.

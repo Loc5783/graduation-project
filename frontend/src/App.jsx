@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuthContext } from './context/AuthContext.jsx';
 import { DeviceProvider } from './context/DeviceContext.jsx';
 import { LanguageProvider, useLanguage, getErrorMessage } from './context/LanguageContext.jsx';
+import { SettingsProvider } from './context/SettingsContext.jsx';
+import { NotificationProvider } from './context/NotificationContext.jsx';
 import { deviceRegistry } from './modules/registry.js';
 import { isPreviewMode } from './services/authService.js';
 
@@ -9,7 +11,17 @@ import Layout from './shared/components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Overview from './pages/Overview.jsx';
+import NotificationsPage from './pages/NotificationsPage.jsx';
 import NotFound from './pages/NotFound.jsx';
+
+import SettingsLayout from './pages/Settings/SettingsLayout.jsx';
+import SettingsIndex from './pages/Settings/SettingsIndex.jsx';
+import AppearanceSettings from './pages/Settings/AppearanceSettings.jsx';
+import AccountSettings from './pages/Settings/AccountSettings.jsx';
+import SecuritySettings from './pages/Settings/SecuritySettings.jsx';
+import NotificationSettings from './pages/Settings/NotificationSettings.jsx';
+import PrivacySettings from './pages/Settings/PrivacySettings.jsx';
+import PlaceholderSection from './pages/Settings/PlaceholderSection.jsx';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isCheckingSession, sessionError, retryCheckSession } = useAuthContext();
@@ -81,50 +93,67 @@ export default function App() {
       <LanguageProvider>
         <AuthProvider>
           <DeviceProvider>
-            <Routes>
-              {/* Tuyến công khai (Auth) */}
-              <Route
-                path="/login"
-                element={
-                  <PublicAuthRoute>
-                    <Login />
-                  </PublicAuthRoute>
-                }
-              />
-              <Route
-                path="/register"
-                element={
-                  <PublicAuthRoute>
-                    <Register />
-                  </PublicAuthRoute>
-                }
-              />
-
-              {/* Tuyến có bảo vệ đăng nhập */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Navigate to="/overview" replace />} />
-                <Route path="overview" element={<Overview />} />
-
-                {/* Tự động nạp đủ 5 route thiết bị từ registry */}
-                {deviceRegistry.map((item) => (
+            <SettingsProvider>
+              <NotificationProvider>
+                <Routes>
+                  {/* Tuyến công khai (Auth) */}
                   <Route
-                    key={item.id}
-                    path={`devices/${item.id}`}
-                    element={<item.Component />}
+                    path="/login"
+                    element={
+                      <PublicAuthRoute>
+                        <Login />
+                      </PublicAuthRoute>
+                    }
                   />
-                ))}
-              </Route>
+                  <Route
+                    path="/register"
+                    element={
+                      <PublicAuthRoute>
+                        <Register />
+                      </PublicAuthRoute>
+                    }
+                  />
 
-              {/* Tuyến 404 cho các đường dẫn không tồn tại */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                  {/* Tuyến có bảo vệ đăng nhập */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <Layout />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Navigate to="/overview" replace />} />
+                    <Route path="overview" element={<Overview />} />
+                    <Route path="notifications" element={<NotificationsPage />} />
+
+                    {/* Tự động nạp đủ 5 route thiết bị từ registry */}
+                    {deviceRegistry.map((item) => (
+                      <Route
+                        key={item.id}
+                        path={`devices/${item.id}`}
+                        element={<item.Component />}
+                      />
+                    ))}
+
+                    {/* Phân hệ Cài đặt hệ thống */}
+                    <Route path="settings" element={<SettingsLayout />}>
+                      <Route index element={<SettingsIndex />} />
+                      <Route path="appearance" element={<AppearanceSettings />} />
+                      <Route path="account" element={<AccountSettings />} />
+                      <Route path="security" element={<SecuritySettings />} />
+                      <Route path="notifications" element={<NotificationSettings />} />
+                      <Route path="privacy" element={<PrivacySettings />} />
+                      <Route path="admin" element={<PlaceholderSection sectionKey="admin" />} />
+                      <Route path="help" element={<PlaceholderSection sectionKey="help" />} />
+                    </Route>
+                  </Route>
+
+                  {/* Tuyến 404 cho các đường dẫn không tồn tại */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </NotificationProvider>
+            </SettingsProvider>
           </DeviceProvider>
         </AuthProvider>
       </LanguageProvider>

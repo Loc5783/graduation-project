@@ -214,6 +214,8 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
 
   // Biến đếm thứ tự yêu cầu để chống phản hồi /me cũ ghi đè sau login/logout
   const activeSeqRef = useRef(0);
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
 
   /**
    * Kiểm tra phiên làm việc với backend (/api/auth/me)
@@ -476,6 +478,43 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     return { success: false, message: errMsg };
   }, [enableDemoAuth]);
 
+  /**
+   * Vô hiệu hóa phiên đăng nhập cục bộ khi nhận phản hồi 401 từ API (không gọi POST /logout).
+   * Có bảo vệ targetUserId để không làm đăng xuất nhầm tài khoản mới khi response 401 thuộc tài khoản cũ.
+   */
+  const handleUnauthorized = useCallback((targetUserId = null) => {
+    const cur = currentUserRef.current;
+    if (targetUserId && cur && cur.id !== targetUserId) {
+      return;
+    }
+    activeSeqRef.current++;
+    clearAllAuthStorages();
+    setCurrentUser(null);
+    setIsCheckingSession(false);
+    setSessionError(null);
+  }, []);
+
+  /**
+   * Cập nhật thông tin hồ sơ cho tài khoản hiện tại (ví dụ: đổi tên đã được server xác nhận).
+   * Giữ nguyên các trường xác thực và phân quyền (id, email, role, owned),
+   * chỉ cập nhật trường name đã được server xác nhận.
+   * Có bảo vệ targetUserId để không đè vào tài khoản khác nếu response về muộn sau khi đổi tài khoản.
+   */
+  const updateProfileUser = useCallback((updatedUserData, targetUserId) => {
+    if (!updatedUserData || !targetUserId) return;
+    setCurrentUser((prev) => {
+      if (!prev || prev.id !== targetUserId) {
+        return prev; // Tài khoản đã đổi hoặc đã đăng xuất, bỏ qua
+      }
+      return {
+        ...prev,
+        name: typeof updatedUserData.name === 'string' && updatedUserData.name.trim()
+          ? updatedUserData.name.trim()
+          : prev.name
+      };
+    });
+  }, []);
+
   const dismissStorageNotice = useCallback(() => {
     setStorageNotice('');
   }, []);
@@ -493,7 +532,9 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     login,
     register,
     logout,
-    checkSession
+    checkSession,
+    handleUnauthorized,
+    updateProfileUser
   };
 
   return (

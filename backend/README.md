@@ -15,3 +15,4 @@ documented in the setup guide; the suite clears its `users` and `sessions` colle
 Implemented routes: `POST /api/auth/register`, `POST /api/auth/login`,
 `GET /api/auth/me`, `POST /api/auth/logout`. Successful user responses use `data.user`.
 POST requests require JSON and an allowed Origin or valid Referer.
+

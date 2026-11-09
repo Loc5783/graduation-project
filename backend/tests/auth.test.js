@@ -15,6 +15,7 @@ const TEST_REFERER = 'http://localhost:5173/register';
 
 describe('Backend Authentication & MongoDB Integration Tests', () => {
   let app;
+  let server;
 
   // 1. Khởi tạo và kiểm tra an toàn database trước toàn bộ test suite
   beforeAll(async () => {
@@ -29,13 +30,28 @@ describe('Backend Authentication & MongoDB Integration Tests', () => {
     }
 
     // Khởi tạo app với secret kiểm thử (createApp sẽ tự động đợi User.init() và sessionStore)
-    app = await createApp({
-      sessionSecret: 'test-secret-test-only-session-secret-not-for-deployment-2026-auth-suite'
+    const expressApp = await createApp({
+      sessionSecret: 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4'
     });
+
+    await new Promise((resolve, reject) => {
+      server = expressApp.listen(0, '127.0.0.1', (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+    server.locals = expressApp.locals;
+    app = server;
   });
 
   // 2. Ngắt kết nối an toàn sau khi chạy xong toàn bộ test
   afterAll(async () => {
+    if (server) {
+      if (typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
+      await new Promise((resolve) => server.close(resolve));
+    }
     await disconnectDB();
   });
 
@@ -848,7 +864,7 @@ describe('Backend Authentication & MongoDB Integration Tests', () => {
       const rateLimitedApp = await createApp({
         sessionStore: app.locals.sessionStore,
         rateLimiter: strictLimiter,
-        sessionSecret: 'test-secret-test-only-session-secret-not-for-deployment-2026-auth-suite'
+        sessionSecret: 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4'
       });
 
       // 3 request đầu tiên
@@ -912,7 +928,7 @@ describe('Backend Authentication & MongoDB Integration Tests', () => {
 
       await expect(
         createApp({
-          sessionSecret: 'test-secret-test-only-session-secret-not-for-deployment-2026-auth-suite'
+          sessionSecret: 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4'
         })
       ).rejects.toThrow('Khởi tạo chỉ mục Unique Index email thất bại: Mô phỏng lỗi index duplicate');
 

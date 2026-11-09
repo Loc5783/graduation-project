@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext.jsx';
 import { useDeviceContext } from '../../context/DeviceContext.jsx';
 import { useLanguage, getDeviceDisplayName, getErrorMessage } from '../../context/LanguageContext.jsx';
@@ -7,6 +7,7 @@ import { deviceRegistry } from '../../modules/registry.js';
 import { isPreviewMode } from '../../services/authService.js';
 import HubStatusIndicator from './HubStatusIndicator.jsx';
 import LanguageToggle from './LanguageToggle.jsx';
+import NotificationBell from './NotificationBell.jsx';
 import {
   BrandHeader,
   OverviewChartIcon,
@@ -26,12 +27,51 @@ export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoutNotice, setLogoutNotice] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const preview = isPreviewMode();
 
   // Refs quản lý focus cho tính tiếp cận (Accessibility - a11y)
   const menuToggleRef = useRef(null);
   const closeBtnRef = useRef(null);
   const wasOpenedRef = useRef(false);
+  const userMenuBtnRef = useRef(null);
+  const userMenuContainerRef = useRef(null);
+
+  // Đóng user menu khi click bên ngoài
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (userMenuContainerRef.current && !userMenuContainerRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isUserMenuOpen]);
+
+  // Đóng user menu bằng phím Escape và trả focus về nút mở
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isUserMenuOpen) {
+        setIsUserMenuOpen(false);
+        userMenuBtnRef.current?.focus();
+      }
+    };
+    if (isUserMenuOpen) {
+      window.addEventListener('keydown', handleEscape);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isUserMenuOpen]);
+
+  // Đóng user menu khi chuyển route
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [location.pathname]);
 
   // Xử lý chuyển focus khi mở/đóng sidebar trên mobile
   useEffect(() => {
@@ -93,6 +133,12 @@ export default function Layout() {
    */
   const getCurrentPageTitle = () => {
     const pathname = location.pathname;
+    if (pathname === '/notifications') {
+      return t('notif_page_title');
+    }
+    if (pathname.startsWith('/settings')) {
+      return t('nav_settings');
+    }
     if (pathname === '/overview' || pathname === '/') {
       return t('nav_overview');
     }
@@ -148,6 +194,26 @@ export default function Layout() {
             <span className="nav-title">{t('nav_overview')}</span>
           </NavLink>
 
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              🔔
+            </span>
+            <span className="nav-title">{t('nav_notifications_inbox')}</span>
+          </NavLink>
+
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ⚙️
+            </span>
+            <span className="nav-title">{t('nav_settings')}</span>
+          </NavLink>
+
           <div className="nav-section-title">{t('nav_smart_devices')}</div>
           {deviceRegistry.map((dev) => (
             <NavLink
@@ -192,6 +258,9 @@ export default function Layout() {
             {/* Bộ chuyển đổi ngôn ngữ VI / EN */}
             <LanguageToggle />
 
+            {/* Chuông thông báo thật trên Topbar (Phase 4D.2) */}
+            {currentUser && <NotificationBell />}
+
             {/* Nếu đang ở chế độ xem trước nội bộ (chỉ trong dev) */}
             {preview && !currentUser && (
               <span className="preview-mode-badge" title="Chế độ xem trước giao diện nội bộ">
@@ -201,27 +270,60 @@ export default function Layout() {
 
             {/* Nếu có phiên đăng nhập thật */}
             {currentUser && (
-              <div className="topbar-user-area">
-                <span className="user-name">
+              <div className="topbar-user-area" ref={userMenuContainerRef}>
+                <button
+                  ref={userMenuBtnRef}
+                  type="button"
+                  className="user-menu-btn"
+                  onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                  aria-expanded={isUserMenuOpen}
+                  aria-haspopup="true"
+                  aria-label={t('user_menu_aria')}
+                >
                   <span className="user-icon" aria-hidden="true">
                     <UserIcon />
                   </span>
-                  <span>{currentUser.name}</span>
-                </span>
-                <span className="user-role-badge">
-                  {getRoleLabel(currentUser.role)}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                  className="btn btn-outline btn-sm logout-btn"
-                >
-                  <span className="logout-icon" aria-hidden="true">
-                    <LogoutIcon />
+                  <span className="user-name">{currentUser.name}</span>
+                  <span className="user-role-badge">
+                    {getRoleLabel(currentUser.role)}
                   </span>
-                  <span>{isLoggingOut ? t('btn_logging_out') : t('btn_logout')}</span>
+                  <span className="user-menu-chevron" aria-hidden="true">
+                    {isUserMenuOpen ? '▴' : '▾'}
+                  </span>
                 </button>
+
+                <div
+                  className="user-account-dropdown"
+                  hidden={!isUserMenuOpen}
+                >
+                  <div className="dropdown-user-info">
+                    <div className="dropdown-user-name">{currentUser.name}</div>
+                    <div className="dropdown-user-email">{currentUser.email}</div>
+                  </div>
+                  <div className="dropdown-divider" />
+                  <Link
+                    to="/settings"
+                    className="dropdown-item settings-link-item"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    <span aria-hidden="true">⚙️</span>
+                    <span>{t('nav_settings')}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      handleLogout();
+                    }}
+                    disabled={isLoggingOut}
+                    className="btn btn-outline btn-sm logout-btn dropdown-item"
+                  >
+                    <span className="logout-icon" aria-hidden="true">
+                      <LogoutIcon />
+                    </span>
+                    <span>{isLoggingOut ? t('btn_logging_out') : t('btn_logout')}</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

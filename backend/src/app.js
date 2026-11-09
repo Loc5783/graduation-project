@@ -5,8 +5,13 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import User from './models/User.js';
+import UserSession from './models/UserSession.js';
+import Notification from './models/Notification.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
+import { createSettingsRouter } from './routes/settingsRoutes.js';
+import { createAccountRouter } from './routes/accountRoutes.js';
+import { createNotificationRouter } from './routes/notificationRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 
 /**
@@ -26,7 +31,7 @@ export async function createApp(options = {}) {
   }
 
   // 1. Giới hạn kích thước payload JSON (chống tấn công DoS qua payload lớn)
-  app.use(express.json({ limit: '10kb' }));
+  app.use(express.json({ limit: '10kb', strict: false }));
   app.use(cookieParser());
 
   // 2. Cấu hình CORS với allowlist
@@ -54,6 +59,47 @@ export async function createApp(options = {}) {
       console.log('[Database] Chỉ mục Unique Index email của User đã sẵn sàng.');
     } catch (indexError) {
       throw new Error(`Khởi tạo chỉ mục Unique Index email thất bại: ${indexError.message}`);
+    }
+    try {
+      // 3.1 Kiểm tra cấu hình chỉ mục hiện có trên collection user_sessions trước khi init
+      const collection = UserSession.collection;
+      const collections = await collection.conn.db.listCollections({ name: collection.collectionName }).toArray();
+      if (collections.length > 0) {
+        const existingIndexes = await collection.indexes();
+        const existingSessionStoreIndex = existingIndexes.find((idx) => idx.name === 'sessionStoreId_1');
+
+        if (existingSessionStoreIndex && !existingSessionStoreIndex.unique) {
+          throw new Error(
+            'Phát hiện chỉ mục "sessionStoreId_1" trong collection "user_sessions" là chỉ mục không duy nhất (non-unique) từ phiên bản cũ. ' +
+            'Server dừng khởi động vì chưa bảo đảm tính duy nhất của phiên đăng nhập. ' +
+            'Vui lòng chạy script quản trị: "node scripts/upgradeSessionIndex.js --survey" để khảo sát dữ liệu hoặc "node scripts/upgradeSessionIndex.js --apply" để nâng cấp chỉ mục.'
+          );
+        }
+      }
+
+      await UserSession.init();
+
+      // 3.2 Kiểm chứng cấu hình index thực tế trên MongoDB; không chỉ dựa vào khai báo unique trong schema
+      const actualIndexes = await collection.indexes();
+      const actualSessionStoreIndex = actualIndexes.find((idx) => idx.name === 'sessionStoreId_1');
+      if (!actualSessionStoreIndex || !actualSessionStoreIndex.unique) {
+        throw new Error(
+          'Chỉ mục "sessionStoreId_1" trên MongoDB chưa đạt yêu cầu unique: true. ' +
+          'Server dừng khởi động để bảo đảm tính toàn vẹn dữ liệu. ' +
+          'Vui lòng chạy script quản trị: "node scripts/upgradeSessionIndex.js --apply".'
+        );
+      }
+
+      console.log('[Database] Chỉ mục UserSession (Unique sessionStoreId) đã sẵn sàng.');
+    } catch (indexError) {
+      throw new Error(`Khởi tạo chỉ mục UserSession thất bại: ${indexError.message}`);
+    }
+
+    try {
+      await Notification.init();
+      console.log('[Database] Chỉ mục Notification đã sẵn sàng.');
+    } catch (indexError) {
+      throw new Error(`Khởi tạo chỉ mục Notification thất bại: ${indexError.message}`);
     }
   }
 
@@ -99,7 +145,19 @@ export async function createApp(options = {}) {
   const authRouter = options.authRouter || createAuthRouter(options);
   app.use('/api/auth', authRouter);
 
-  // 6. Xử lý đường dẫn không tồn tại (404 Handler)
+  // 6. Mount các route cài đặt (Settings)
+  const settingsRouter = options.settingsRouter || createSettingsRouter(options);
+  app.use('/api/settings', settingsRouter);
+
+  // 7. Mount các route tài khoản (Account)
+  const accountRouter = options.accountRouter || createAccountRouter(options);
+  app.use('/api/account', accountRouter);
+
+  // 8. Mount các route thông báo (Notifications)
+  const notificationRouter = options.notificationRouter || createNotificationRouter(options);
+  app.use('/api/notifications', notificationRouter);
+
+  // 9. Xử lý đường dẫn không tồn tại (404 Handler)
   app.use((req, res) => {
     res.status(404).json({
       success: false,
@@ -108,7 +166,7 @@ export async function createApp(options = {}) {
     });
   });
 
-  // 7. Xử lý lỗi tập trung (Error Handler)
+  // 8. Xử lý lỗi tập trung (Error Handler)
   app.use(errorHandler);
 
   return app;

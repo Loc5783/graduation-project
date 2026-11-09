@@ -12,3 +12,4 @@ Typical responsibilities:
 - Shared hooks and utilities
 
 Shared changes should be developed in short-lived `feature/*` branches and merged into `integration`.
+

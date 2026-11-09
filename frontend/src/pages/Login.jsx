@@ -32,7 +32,21 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverNotice, setServerNotice] = useState(null);
+  const [serverNotice, setServerNotice] = useState(() => {
+    if (location.state?.noticeCode) {
+      return {
+        type: location.state.noticeType || 'success',
+        code: location.state.noticeCode
+      };
+    }
+    if (location.state?.notice) {
+      return {
+        type: location.state.noticeType || 'info',
+        message: location.state.notice
+      };
+    }
+    return null;
+  });
   const [showForgotNotice, setShowForgotNotice] = useState(false);
 
   // Refs để tự động focus vào trường lỗi đầu tiên

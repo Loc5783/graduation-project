@@ -1,7 +1,7 @@
 /**
  * Middleware kiểm tra tính hợp lệ của Origin và Referer (Chống CSRF)
  * Áp dụng cho các phương thức thay đổi trạng thái (POST, PUT, PATCH, DELETE).
- *
+ * 
  * Quy tắc:
  * 1. Không tin cậy tiêu đề do client tự khai; chỉ so sánh với allowlist cấu hình phía server.
  * 2. Nếu có Origin: phải thuộc allowlist; từ chối 'null' hoặc domain lạ.
@@ -11,15 +11,20 @@
 
 export function parseAllowedOrigins() {
   const envOrigins = process.env.ALLOWED_ORIGINS;
-  if (envOrigins) {
-    return envOrigins.split(',').map((o) => o.trim()).filter(Boolean);
-  }
-  return [
+  const allowedOrigins = envOrigins
+    ? envOrigins.split(',').map((o) => o.trim()).filter(Boolean)
+    : [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:5000',
     'http://127.0.0.1:5000'
-  ];
+    ];
+
+  // Cổng riêng của Smart Home ở máy phát triển; giữ nguyên allowlist production/test.
+  if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
+    allowedOrigins.push('http://localhost:5180', 'http://127.0.0.1:5180');
+  }
+  return [...new Set(allowedOrigins)];
 }
 
 export function createOriginVerifier(customOrigins) {
