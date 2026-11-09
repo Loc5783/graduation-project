@@ -11,6 +11,7 @@ import NotificationBell from './NotificationBell.jsx';
 import {
   BrandHeader,
   OverviewChartIcon,
+  ShieldBrandIcon,
   getDeviceIcon,
   CloseIcon,
   LogoutIcon,
@@ -142,6 +143,9 @@ export default function Layout() {
     if (pathname === '/overview' || pathname === '/') {
       return t('nav_overview');
     }
+    if (pathname === '/privacy' || pathname === '/reports') {
+      return t('nav_privacy');
+    }
     if (pathname.startsWith('/devices/')) {
       const devId = pathname.replace('/devices/', '').split('/')[0];
       const dev = deviceRegistry.find((d) => d.id === devId);
@@ -212,6 +216,16 @@ export default function Layout() {
               ⚙️
             </span>
             <span className="nav-title">{t('nav_settings')}</span>
+          </NavLink>
+
+          <NavLink
+            to="/privacy"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              <ShieldBrandIcon />
+            </span>
+            <span className="nav-title">{t('nav_privacy')}</span>
           </NavLink>
 
           <div className="nav-section-title">{t('nav_smart_devices')}</div>
