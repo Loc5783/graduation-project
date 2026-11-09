@@ -126,6 +126,8 @@ export default function App() {
                     <Route index element={<Navigate to="/overview" replace />} />
                     <Route path="overview" element={<Overview />} />
                     <Route path="notifications" element={<NotificationsPage />} />
+                    <Route path="privacy" element={<Navigate to="/settings/privacy" replace />} />
+                    <Route path="reports" element={<Navigate to="/settings/privacy" replace />} />
 
                     {/* Tự động nạp đủ 5 route thiết bị từ registry */}
                     {deviceRegistry.map((item) => (
