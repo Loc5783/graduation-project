@@ -1,0 +1,6 @@
+# Copy this file to mosquitto.conf and adapt paths for your machine.
+listener 1883 0.0.0.0
+allow_anonymous false
+password_file D:/smart-home-privacy-dashboard/iot/mqtt/passwords.txt
+acl_file D:/smart-home-privacy-dashboard/iot/mqtt/acl.conf
+persistence false

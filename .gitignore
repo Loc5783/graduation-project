@@ -28,3 +28,18 @@ backend/.env.*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local firmware dependencies and private configuration
+**/.pio/
+**/managed_components/
+**/build/
+**/network_config.h
+**/wifi_config.h
+**/mqtt_config.h
+**/hybrid_config.h
+**/wifi_secrets.h
+**/secrets.h
+**/sdkconfig
+**/sdkconfig.before_*
+**/credentials.local.json
+**/passwords.txt

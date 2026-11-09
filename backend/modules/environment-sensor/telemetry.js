@@ -242,4 +242,3 @@ export class EnvironmentSensorTelemetry extends EventEmitter {
   }
 }
 
-

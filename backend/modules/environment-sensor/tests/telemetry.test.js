@@ -92,4 +92,3 @@ describe('EnvironmentSensor Telemetry & Normalization', () => {
   });
 });
 
-

@@ -13,6 +13,9 @@ import { createSettingsRouter } from './routes/settingsRoutes.js';
 import { createAccountRouter } from './routes/accountRoutes.js';
 import { createNotificationRouter } from './routes/notificationRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
+import { EnvironmentSensorTelemetry } from '../modules/environment-sensor/telemetry.js';
+import { createEnvironmentSensorRouter } from '../modules/environment-sensor/router.js';
+import { smartPlugRoutes } from '../modules/smart-plug/smartPlugRoutes.js';
 
 /**
  * Khởi tạo ứng dụng Express và cấu hình các middleware an toàn
@@ -158,6 +161,15 @@ export async function createApp(options = {}) {
   app.use('/api/notifications', notificationRouter);
 
   // 9. Xử lý đường dẫn không tồn tại (404 Handler)
+  // Module Cảm biến môi trường (Environment Sensor)
+  const envTelemetry = options.environmentSensorTelemetry || new EnvironmentSensorTelemetry();
+  app.locals.environmentSensorTelemetry = envTelemetry;
+  app.use('/api/environment-sensor', createEnvironmentSensorRouter(envTelemetry, options.environmentSensorOptions));
+
+  // Module Ổ cắm thông minh (Smart Plug - Nhật Anh)
+  app.use('/api/devices/smart-plug', smartPlugRoutes);
+
+  // 6. Xử lý đường dẫn không tồn tại (404 Handler)
   app.use((req, res) => {
     res.status(404).json({
       success: false,

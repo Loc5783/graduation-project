@@ -466,6 +466,13 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     if (res.success) {
       // Hủy phiên thành công trên server: tăng sequence và kết thúc trạng thái kiểm tra phiên
       activeSeqRef.current++;
+      // Chỉ dọn dẹp storage thực sự đang chứa session/token cũ nếu có
+      if (safeGetItem('local', STORAGE_KEY_AUTH) !== null) {
+        safeRemoveItem('local', STORAGE_KEY_AUTH);
+      }
+      if (safeGetItem('session', STORAGE_KEY_AUTH) !== null) {
+        safeRemoveItem('session', STORAGE_KEY_AUTH);
+      }
       setCurrentUser(null);
       setIsCheckingSession(false);
       setSessionError(null);

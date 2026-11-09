@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export const STALE_AFTER_MS = 7000;
 const API = '/api/environment-sensor';
@@ -15,6 +15,8 @@ function isSnapshot(value) {
 
 export default function useEnvironmentSensor() {
   const [record, setRecord] = useState(null);
+  const recordRef = useRef(null);
+  recordRef.current = record;
   const [streamConnected, setStreamConnected] = useState(false);
   const [error, setError] = useState(null);
   const [now, setNow] = useState(Date.now);
@@ -74,7 +76,7 @@ export default function useEnvironmentSensor() {
           accept(body.data, false);
         }
       } catch {
-        if (active && !controller.signal.aborted && !record) {
+        if (active && !controller.signal.aborted && !recordRef.current) {
           setError('unavailable');
         }
       } finally {
@@ -127,7 +129,6 @@ export default function useEnvironmentSensor() {
       clearInterval(pollInterval);
       clearInterval(watchdog);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const snapshot = record?.snapshot ?? null;
@@ -143,5 +144,4 @@ export default function useEnvironmentSensor() {
 
   return { snapshot, live, streamConnected, error };
 }
-
 

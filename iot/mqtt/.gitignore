@@ -1,0 +1,6 @@
+passwords.txt
+mosquitto.conf
+
+credentials.local.json
+mosquitto.log
+mosquitto.local.conf

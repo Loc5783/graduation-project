@@ -1,0 +1,6 @@
+#pragma once
+
+#define BIN_WIFI_SSID "YOUR_2_4GHZ_WIFI"
+#define BIN_WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define BIN_AP_SSID "SmartBin-Local"
+#define BIN_AP_PASSWORD "CHOOSE_A_PRIVATE_PASSWORD"

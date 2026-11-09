@@ -375,4 +375,3 @@ window.addEventListener('DOMContentLoaded', () => {
     dom.connText.textContent = 'Nhập địa chỉ WebSocket của ESP32';
   }
 });
-

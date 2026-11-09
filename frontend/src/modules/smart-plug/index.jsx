@@ -7,6 +7,7 @@ export default function SmartPlugModule() {
     <DevicePage
       config={smartPlugConfig}
       ownerArea={<SmartPlugOwnerArea />}
+      hideHeader={true}
     />
   );
 }
