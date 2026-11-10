@@ -1,5 +1,16 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
+
+// Đảm bảo SESSION_SECRET luôn sẵn sàng kể cả khi chưa thiết lập .env trên máy mới
+if (!process.env.SESSION_SECRET) {
+  process.env.SESSION_SECRET = 'df426817e903480c5785c4d2f0a3b7ec3844789295668fc0886f32b37f3ae3d6';
+}
 
 import session from 'express-session';
 import { connectDB, disconnectDB } from './config/db.js';

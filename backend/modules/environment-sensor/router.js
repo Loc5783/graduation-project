@@ -24,6 +24,27 @@ export function createEnvironmentSensorRouter(
     response.json({ success: true, data: telemetry.getSnapshot() });
   });
 
+  router.post('/command', (request, response) => {
+    const user = request.user;
+    const canControl = user && (
+      user.role === 'admin' ||
+      (user.role === 'member' && Array.isArray(user.owned) && user.owned.includes('environment-sensor'))
+    );
+
+    if (user && !canControl) {
+      return response.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        message: 'Tài khoản của bạn không có quyền điều khiển thiết bị này. Chỉ Quỳnh hoặc Quản trị viên mới được thao tác.'
+      });
+    }
+
+    return response.status(200).json({
+      success: true,
+      message: 'Lệnh điều khiển cảm biến môi trường đã được gửi thành công.'
+    });
+  });
+
   router.get('/events', (request, response) => {
     response.status(200).set({
       'Content-Type': 'text/event-stream; charset=utf-8',

@@ -6,6 +6,7 @@ export default function EnvironmentSensorModule() {
   return (
     <DevicePage
       config={environmentSensorConfig}
+      hideHeader={true}
       ownerArea={<EnvironmentSensorOwnerArea />}
     />
   );

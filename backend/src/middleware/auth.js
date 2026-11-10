@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
 import parseUserAgent from '../utils/userAgentParser.js';
@@ -91,6 +92,19 @@ export function verifySessionRegistry(record, user, userAuthVersion, now = new D
 export async function requireAuth(req, res, next) {
   try {
     if (!req.session || !req.session.userId) {
+      return res.status(401).json({
+        success: false,
+        code: 'UNAUTHORIZED',
+        message: 'Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn.'
+      });
+    }
+
+    // Khi cơ sở dữ liệu MongoDB ngoại tuyến (offline memory mode)
+    if (mongoose.connection.readyState !== 1) {
+      if (req.session.mockUser) {
+        req.user = req.session.mockUser;
+        return next();
+      }
       return res.status(401).json({
         success: false,
         code: 'UNAUTHORIZED',

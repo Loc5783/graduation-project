@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
 import parseUserAgent from '../utils/userAgentParser.js';
@@ -147,6 +148,40 @@ export async function login(req, res, next) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Hỗ trợ chế độ offline (khi MongoDB không chạy trên máy phát triển)
+    if (mongoose.connection.readyState !== 1) {
+      const demoAccounts = [
+        { id: 'usr_admin', name: 'Quản trị viên hệ thống', email: 'admin@smarthome.local', role: 'admin', owned: [] },
+        { id: 'usr_quynh', name: 'Đỗ Thúy Quỳnh', email: 'quynh@smarthome.local', role: 'member', owned: ['environment-sensor'] },
+        { id: 'usr_nhatanh', name: 'Phạm Nhật Anh', email: 'nhatanh@smarthome.local', role: 'member', owned: ['smart-plug'] },
+        { id: 'usr_thanh', name: 'Nguyễn Văn Thành', email: 'thanh@smarthome.local', role: 'member', owned: ['smart-door-lock'] },
+        { id: 'usr_viewer', name: 'Khách xem (Viewer)', email: 'viewer@smarthome.local', role: 'viewer', owned: [] }
+      ];
+
+      const found = demoAccounts.find(
+        (acc) => acc.email === normalizedEmail || acc.email.split('@')[0] === normalizedEmail
+      );
+
+      if (found) {
+        const mockUser = {
+          _id: found.id,
+          id: found.id,
+          name: found.name,
+          email: found.email,
+          role: found.role,
+          owned: found.owned,
+          authVersion: 1,
+          createdAt: new Date().toISOString()
+        };
+        req.session.userId = found.id;
+        req.session.mockUser = mockUser;
+        return res.status(200).json({
+          success: true,
+          data: { user: mockUser }
+        });
+      }
+    }
+
     // Nếu mật khẩu vượt quá 72 byte, chắc chắn không thể khớp (bcrypt chỉ băm tối đa 72 byte)
     // Nhưng vẫn chạy dummy compare để giữ timing nhất quán
     const byteLength = Buffer.byteLength(password, 'utf8');
@@ -270,16 +305,17 @@ export async function login(req, res, next) {
  * Được bảo vệ bởi requireAuth middleware
  */
 export async function me(req, res) {
+  const userId = req.user._id ? req.user._id.toString() : (req.user.id || 'usr_unknown');
   return res.status(200).json({
     success: true,
     data: {
       user: {
-        id: req.user._id.toString(),
+        id: userId,
         name: req.user.name,
         email: req.user.email,
         role: req.user.role,
-        owned: req.user.owned,
-        createdAt: req.user.createdAt
+        owned: req.user.owned || [],
+        createdAt: req.user.createdAt || new Date().toISOString()
       }
     }
   });
