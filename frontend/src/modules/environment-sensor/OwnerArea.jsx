@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import useEnvironmentSensor from './useEnvironmentSensor.js';
+import { useAuthContext } from '../../context/AuthContext.jsx';
+import { canEditDevice, getPermissionExplanation } from '../../shared/roles.js';
+import { isPreviewMode } from '../../services/authService.js';
 import './EnvironmentSensor.css';
 
 /* ==============================================================================
@@ -57,8 +60,20 @@ const IconClose = () => (
    MAIN COMPONENT: EnvironmentSensorOwnerArea
    ============================================================================== */
 export default function EnvironmentSensorOwnerArea() {
-  // [GIỮ NGUYÊN HOÀN TOÀN]: Hook dữ liệu thật từ backend & ESP32
-  const { snapshot, live, streamConnected, error } = useEnvironmentSensor();
+  const { currentUser } = useAuthContext();
+  const preview = isPreviewMode();
+  
+  // Phân quyền RBAC nghiêm ngặt:
+  // - Admin: Toàn quyền điều khiển và cấu hình tất cả thiết bị
+  // - Member (Quỳnh): Có quyền điều khiển thiết bị environment-sensor do mình phụ trách
+  // - Viewer: Chỉ được xem dữ liệu, bị khóa tất cả nút thao tác phần cứng
+  const userCanEdit = currentUser
+    ? canEditDevice(currentUser, 'environment-sensor')
+    : preview;
+  const permissionMessage = getPermissionExplanation(currentUser, 'environment-sensor');
+
+  // [GIỮ NGUYÊN HOÀN TOÀN]: Hook dữ liệu thật từ backend & ESP32 (kèm kết nối MQTT WebSocket trực tiếp)
+  const { snapshot, live, streamConnected, error, publishCommand } = useEnvironmentSensor();
 
   // [GIỮ NGUYÊN HOÀN TOÀN]: State giả lập phục vụ xem trước / kiểm thử
   const [mockMode, setMockMode] = useState(false);
@@ -163,11 +178,22 @@ export default function EnvironmentSensorOwnerArea() {
 
   // Xử lý nút "Thử còi 2 giây"
   const handleTestBuzzer = () => {
+    if (!userCanEdit) {
+      setSaveToast(permissionMessage || 'Tài khoản Khách xem (Viewer) chỉ có quyền xem dữ liệu, không được điều khiển còi.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
+
     if (isBuzzerTesting) return;
     setIsBuzzerTesting(true);
     const now = new Date();
     setLastBuzzerTestTime(`Hôm nay ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
     
+    // Gửi lệnh thử còi tới ESP32 qua MQTT
+    if (typeof publishCommand === 'function') {
+      publishCommand({ action: 'test_buzzer', durationMs: 2000 });
+    }
+
     // Phát âm thanh bíp tần số 1200Hz qua Web Audio API của trình duyệt nếu được hỗ trợ
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -190,8 +216,29 @@ export default function EnvironmentSensorOwnerArea() {
     }, 2000);
   };
 
+  // Xử lý nút "Tắt tiếng 10 phút"
+  const handleMute = () => {
+    if (!userCanEdit) {
+      setSaveToast(permissionMessage || 'Tài khoản Khách xem (Viewer) chỉ có quyền xem dữ liệu, không được tắt chuông cảnh báo.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (typeof publishCommand === 'function') {
+      publishCommand({ action: 'mute', durationMinutes: 10, enabled: nextMuted });
+    }
+    setSaveToast(nextMuted ? 'Đã tắt chuông cảnh báo trong 10 phút' : 'Đã bật lại chuông cảnh báo');
+    setTimeout(() => setSaveToast(null), 3500);
+  };
+
   // Xử lý nút "Lưu" ngưỡng cảnh báo
   const handleSaveThreshold = () => {
+    if (!userCanEdit) {
+      setSaveToast(permissionMessage || 'Tài khoản Khách xem (Viewer) chỉ có quyền xem dữ liệu, không được thay đổi ngưỡng cảnh báo.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
     setSaveToast(`Đã lưu ngưỡng cảnh báo: ${warningThreshold} ADC`);
     setTimeout(() => setSaveToast(null), 3000);
   };
@@ -423,11 +470,12 @@ export default function EnvironmentSensorOwnerArea() {
 
           <button
             type="button"
-            className="env-btn-buzzer-test"
+            className={`env-btn-buzzer-test ${!userCanEdit ? 'disabled' : ''}`}
             onClick={handleTestBuzzer}
-            disabled={isBuzzerTesting}
+            disabled={isBuzzerTesting || !userCanEdit}
+            title={!userCanEdit ? (permissionMessage || 'Tài khoản Viewer chỉ có quyền xem') : undefined}
           >
-            {isBuzzerTesting ? 'Đang thử còi...' : 'Thử còi 2 giây'}
+            {isBuzzerTesting ? 'Đang thử còi...' : (!userCanEdit ? 'Chỉ xem còi (Viewer)' : 'Thử còi 2 giây')}
           </button>
         </div>
       </section>
@@ -592,12 +640,34 @@ export default function EnvironmentSensorOwnerArea() {
             <p className="env-control-sub">Chế độ thử nghiệm giao diện</p>
           </div>
 
+          {!userCanEdit && (
+            <div className="env-viewer-notice" style={{
+              padding: '0.55rem 0.75rem',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              color: '#fca5a5',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              <span>👁️</span>
+              <span><strong>Khách xem (Viewer):</strong> Bạn chỉ có quyền xem dữ liệu, không thể gửi lệnh điều khiển phần cứng.</span>
+            </div>
+          )}
+
           {/* 3 Nút chuyển Sim: An toàn / Cảnh báo / Nguy hiểm (GIỮ NGUYÊN LOGIC SIM CŨ) */}
           <div className="env-sim-button-group" role="group" aria-label="Chọn kịch bản mô phỏng">
             <button
               type="button"
               className={`env-sim-btn ${mockMode && mockState.alertLevel === 1 ? 'active-safe' : ''}`}
               onClick={() => {
+                if (!userCanEdit) {
+                  setSaveToast(permissionMessage || 'Tài khoản Viewer chỉ có quyền xem dữ liệu.');
+                  setTimeout(() => setSaveToast(null), 3500);
+                  return;
+                }
                 setMockMode(true);
                 setMockState({
                   gasRaw: 640,
@@ -610,6 +680,7 @@ export default function EnvironmentSensorOwnerArea() {
                   wifiRssi: -58
                 });
               }}
+              disabled={!userCanEdit}
             >
               An toàn
             </button>
@@ -617,6 +688,11 @@ export default function EnvironmentSensorOwnerArea() {
               type="button"
               className={`env-sim-btn ${mockMode && mockState.alertLevel === 2 ? 'active-warn' : ''}`}
               onClick={() => {
+                if (!userCanEdit) {
+                  setSaveToast(permissionMessage || 'Tài khoản Viewer chỉ có quyền xem dữ liệu.');
+                  setTimeout(() => setSaveToast(null), 3500);
+                  return;
+                }
                 setMockMode(true);
                 setMockState({
                   gasRaw: 1650,
@@ -629,6 +705,7 @@ export default function EnvironmentSensorOwnerArea() {
                   wifiRssi: -58
                 });
               }}
+              disabled={!userCanEdit}
             >
               Cảnh báo
             </button>
@@ -636,6 +713,11 @@ export default function EnvironmentSensorOwnerArea() {
               type="button"
               className={`env-sim-btn ${mockMode && mockState.alertLevel === 3 ? 'active-danger' : ''}`}
               onClick={() => {
+                if (!userCanEdit) {
+                  setSaveToast(permissionMessage || 'Tài khoản Viewer chỉ có quyền xem dữ liệu.');
+                  setTimeout(() => setSaveToast(null), 3500);
+                  return;
+                }
                 setMockMode(true);
                 setMockState({
                   gasRaw: 2850,
@@ -648,6 +730,7 @@ export default function EnvironmentSensorOwnerArea() {
                   wifiRssi: -58
                 });
               }}
+              disabled={!userCanEdit}
             >
               Nguy hiểm
             </button>
@@ -688,6 +771,7 @@ export default function EnvironmentSensorOwnerArea() {
               value={warningThreshold}
               onChange={(e) => setWarningThreshold(Number(e.target.value))}
               aria-label="Điều chỉnh ngưỡng cảnh báo gas ADC"
+              disabled={!userCanEdit}
             />
           </div>
 
@@ -696,7 +780,8 @@ export default function EnvironmentSensorOwnerArea() {
             <button
               type="button"
               className={`env-btn-mute ${isMuted ? 'is-muted' : ''}`}
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={handleMute}
+              disabled={!userCanEdit}
             >
               {isMuted ? 'Đã tắt tiếng' : 'Tắt tiếng 10 phút'}
             </button>
@@ -704,6 +789,7 @@ export default function EnvironmentSensorOwnerArea() {
               type="button"
               className="env-btn-save"
               onClick={handleSaveThreshold}
+              disabled={!userCanEdit}
             >
               Lưu
             </button>
