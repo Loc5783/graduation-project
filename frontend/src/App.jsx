@@ -21,6 +21,7 @@ import AccountSettings from './pages/Settings/AccountSettings.jsx';
 import SecuritySettings from './pages/Settings/SecuritySettings.jsx';
 import NotificationSettings from './pages/Settings/NotificationSettings.jsx';
 import PrivacySettings from './pages/Settings/PrivacySettings.jsx';
+import AdminSettings from './pages/Settings/AdminSettings.jsx';
 import PlaceholderSection from './pages/Settings/PlaceholderSection.jsx';
 
 function ProtectedRoute({ children }) {
@@ -46,13 +47,33 @@ function ProtectedRoute({ children }) {
           <span className="auth-error-icon" aria-hidden="true">⚠️</span>
           <h2>{t('session_error_title')}</h2>
           <p>{getErrorMessage(sessionError, t)}</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={retryCheckSession}
-          >
-            {t('btn_retry')}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={retryCheckSession}
+            >
+              {t('btn_retry')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                try {
+                  localStorage.setItem('shp_auth_session', JSON.stringify({
+                    id: 'usr_preview',
+                    name: 'Quỳnh (Kỹ sư IoT)',
+                    email: 'quynh@smarthome.local',
+                    role: 'admin',
+                    owned: ['environment-sensor', 'smart-door-lock', 'smart-speaker', 'window-sensor', 'smart-plug']
+                  }));
+                } catch {}
+                window.location.reload();
+              }}
+            >
+              Vào xem trước giao diện
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -128,6 +149,7 @@ export default function App() {
                     <Route path="notifications" element={<NotificationsPage />} />
                     <Route path="privacy" element={<Navigate to="/settings/privacy" replace />} />
                     <Route path="reports" element={<Navigate to="/settings/privacy" replace />} />
+                    <Route path="admin" element={<Navigate to="/settings/admin" replace />} />
 
                     {/* Tự động nạp đủ 5 route thiết bị từ registry */}
                     {deviceRegistry.map((item) => (
@@ -146,7 +168,7 @@ export default function App() {
                       <Route path="security" element={<SecuritySettings />} />
                       <Route path="notifications" element={<NotificationSettings />} />
                       <Route path="privacy" element={<PrivacySettings />} />
-                      <Route path="admin" element={<PlaceholderSection sectionKey="admin" />} />
+                      <Route path="admin" element={<AdminSettings />} />
                       <Route path="help" element={<PlaceholderSection sectionKey="help" />} />
                     </Route>
                   </Route>

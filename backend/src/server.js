@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import session from 'express-session';
 import { connectDB, disconnectDB } from './config/db.js';
 import { createApp } from './app.js';
 import { createEnvironmentSensorBridge } from '../modules/environment-sensor/bridge.js';
@@ -14,9 +15,18 @@ async function startServer() {
 
   try {
     // 1. Thử kết nối cơ sở dữ liệu MongoDB phát triển
-    await connectDB(MONGODB_URI);
+    await connectDB(MONGODB_URI, 2);
     isDbConnected = true;
-    const app = await createApp();
+  } catch (dbErr) {
+    console.warn(`[Database Warning] Không thể kết nối MongoDB (${MONGODB_URI}): ${dbErr.message}`);
+    console.warn('[Database Warning] Backend tự động chạy ở chế độ Bộ nhớ tạm (MemoryStore fallback) để giữ API và MQTT Bridge hoạt động liên tục.');
+  }
+
+  try {
+    const appOptions = isDbConnected
+      ? {}
+      : { skipUserInit: true, sessionStore: new session.MemoryStore() };
+    const app = await createApp(appOptions);
 
     envBridge = createEnvironmentSensorBridge(app.locals.environmentSensorTelemetry);
     envBridge.start();

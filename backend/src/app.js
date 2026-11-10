@@ -12,6 +12,7 @@ import { createAuthRouter } from './routes/authRoutes.js';
 import { createSettingsRouter } from './routes/settingsRoutes.js';
 import { createAccountRouter } from './routes/accountRoutes.js';
 import { createNotificationRouter } from './routes/notificationRoutes.js';
+import { createAdminRouter } from './routes/adminRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { EnvironmentSensorTelemetry } from '../modules/environment-sensor/telemetry.js';
 import { createEnvironmentSensorRouter } from '../modules/environment-sensor/router.js';
@@ -160,8 +161,11 @@ export async function createApp(options = {}) {
   const notificationRouter = options.notificationRouter || createNotificationRouter(options);
   app.use('/api/notifications', notificationRouter);
 
-  // 9. Xử lý đường dẫn không tồn tại (404 Handler)
-  // Module Cảm biến môi trường (Environment Sensor)
+  // 9. Mount các route quản trị hệ thống (Admin)
+  const adminRouter = options.adminRouter || createAdminRouter(options);
+  app.use('/api/admin', adminRouter);
+
+  // 10. Module Cảm biến môi trường (Environment Sensor)
   const envTelemetry = options.environmentSensorTelemetry || new EnvironmentSensorTelemetry();
   app.locals.environmentSensorTelemetry = envTelemetry;
   app.use('/api/environment-sensor', createEnvironmentSensorRouter(envTelemetry, options.environmentSensorOptions));
