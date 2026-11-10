@@ -180,7 +180,7 @@ export default function SmartPlugOwnerArea() {
   const text = isVi ? i18n.vi : i18n.en;
 
   const preview = isPreviewMode();
-  const userCanEdit = preview || canEditDevice(currentUser, 'smart-plug');
+  const userCanEdit = currentUser ? canEditDevice(currentUser, 'smart-plug') : preview;
   const permissionMessage = getPermissionExplanation(currentUser, 'smart-plug');
 
   // Trạng thái Bật/Tắt bóng LED (Rơ-le 1)

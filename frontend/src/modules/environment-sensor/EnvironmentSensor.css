@@ -1,209 +1,680 @@
-.env-dashboard {
-  margin-top: 1.5rem;
+/* ==============================================================================
+   Environment Sensor & Kitchen Gas Alert Module Stylesheet
+   Theo phong cách Dark Theme đồng bộ Mockup Figma / SmartHomePrivacy
+   Màu chủ đạo: Nền #0b1220, Card #111a2e, Viền #1f2b45, Text #e8eefc, Muted #9fb0cf
+   ============================================================================== */
+
+:root {
+  --env-bg-main: #0b1220;
+  --env-card-bg: #111a2e;
+  --env-card-inner: #0e1627;
+  --env-card-border: #1f2b45;
+  --env-card-border-hover: #29395c;
+  --env-text-main: #e8eefc;
+  --env-text-sub: #9fb0cf;
+  --env-text-muted: #5e7195;
+  --env-color-safe: #34d399;
+  --env-color-warn: #fbbf24;
+  --env-color-danger: #f87171;
+  --env-color-blue: #60a5fa;
+  --env-color-cyan: #38bdf8;
+  --env-radius-card: 16px;
+  --env-radius-sm: 8px;
+  --env-gap: 20px;
+}
+
+/* Ẩn header mặc định đơn điệu của DevicePage khi hiển thị module environment-sensor */
+.device-page-container:has([data-module="environment-sensor"]) > .device-page-header {
+  display: none !important;
+}
+
+/* Container chính của khu vực phát triển riêng (Quỳnh) */
+.owner-area-container[data-module="environment-sensor"] {
+  max-width: 1120px;
+  margin: 0 auto;
+  color: var(--env-text-main);
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  font-family: inherit;
+  gap: var(--env-gap);
+  padding-bottom: 2rem;
 }
 
-.env-hero-banner {
-  padding: 1.25rem 1.5rem;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid transparent;
-  transition: all 0.3s ease;
-}
-
-.env-hero-banner.level-safe {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.05));
-  border-color: rgba(16, 185, 129, 0.3);
-  color: #065f46;
-}
-
-.env-hero-banner.level-warning {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.06));
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #92400e;
-}
-
-.env-hero-banner.level-danger {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(220, 38, 38, 0.08));
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #991b1b;
-  animation: pulse-danger 2s infinite;
-}
-
-.env-hero-banner.level-warmup {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.05));
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #1e40af;
-}
-
-.env-hero-banner.level-offline {
-  background: rgba(107, 114, 128, 0.1);
-  border-color: rgba(107, 114, 128, 0.25);
-  color: #4b5563;
-}
-
-@keyframes pulse-danger {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-}
-
-.env-hero-main {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.env-hero-icon {
-  font-size: 2.2rem;
-  line-height: 1;
-}
-
-.env-hero-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 0.25rem 0;
-}
-
-.env-hero-desc {
-  font-size: 0.875rem;
-  margin: 0;
-  opacity: 0.9;
-}
-
-.env-connection-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 9999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.env-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.env-dot.online { background-color: #10b981; box-shadow: 0 0 6px #10b981; }
-.env-dot.offline { background-color: #ef4444; }
-
-/* Grid of Metrics */
-.env-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.env-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.env-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
-}
-
-.env-card-header {
+/* -----------------------------------------------------------------------------
+   1. HEADER MODULE (Tiêu đề, Chips nhận diện, Trạng thái & Nút kỹ thuật)
+   ----------------------------------------------------------------------------- */
+.env-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+}
+
+.env-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.env-header-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--env-text-main);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.env-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.env-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: #141f36;
+  border: 1px solid var(--env-card-border);
+  color: var(--env-text-sub);
+}
+
+.env-chip code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--env-color-cyan);
+}
+
+.env-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.env-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 9999px;
+  background: #0f1c30;
+  border: 1px solid var(--env-card-border);
+  font-size: 0.825rem;
+  font-weight: 500;
+  color: var(--env-text-sub);
+}
+
+.env-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.env-status-dot.online {
+  background-color: var(--env-color-safe);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.75);
+}
+
+.env-status-dot.offline {
+  background-color: var(--env-text-muted);
+}
+
+.env-status-dot.danger {
+  background-color: var(--env-color-danger);
+  box-shadow: 0 0 10px rgba(248, 113, 113, 0.9);
+  animation: env-pulse 1.2s infinite ease-in-out;
+}
+
+.env-btn-tech {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  min-height: 44px;
+  border-radius: var(--env-radius-sm);
+  background: #152238;
+  border: 1px solid var(--env-card-border);
+  color: var(--env-text-main);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.env-btn-tech:hover {
+  background: #1d2e4d;
+  border-color: #2e436d;
+}
+
+/* -----------------------------------------------------------------------------
+   2. HÀNG 4 THẺ THÔNG SỐ (Tỉ lệ 1.35 : 1 : 1 : 1)
+   ----------------------------------------------------------------------------- */
+.env-metrics-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr 1fr;
+  gap: var(--env-gap);
+}
+
+.env-card {
+  background: var(--env-card-bg);
+  border: 1px solid var(--env-card-border);
+  border-radius: var(--env-radius-card);
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.25s, box-shadow 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+
+.env-card:hover {
+  border-color: var(--env-card-border-hover);
+}
+
+.env-card.card-warn {
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.12);
+}
+
+.env-card.card-danger {
+  border-color: rgba(248, 113, 113, 0.6);
+  box-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+  animation: env-border-pulse 2s infinite ease-in-out;
+}
+
+@keyframes env-border-pulse {
+  0%, 100% { border-color: rgba(248, 113, 113, 0.5); }
+  50% { border-color: rgba(248, 113, 113, 1); }
+}
+
+@keyframes env-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* Header trong từng card */
+.env-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.75rem;
 }
 
-.env-card-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #4b5563;
+.env-card-label {
+  font-size: 0.85rem;
+  color: var(--env-text-sub);
+  font-weight: 500;
   margin: 0;
 }
 
-.env-card-glyph {
-  font-size: 1.3rem;
-  opacity: 0.8;
+.env-card-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--env-text-sub);
 }
 
-.env-card-value {
-  font-size: 2rem;
+.env-card-icon.icon-temp { color: var(--env-color-warn); }
+.env-card-icon.icon-hum { color: var(--env-color-blue); }
+.env-card-icon.icon-buzzer { color: var(--env-text-sub); }
+.env-card-icon.icon-buzzer.active { color: var(--env-color-danger); animation: env-pulse 1s infinite; }
+
+/* Thẻ Gas / Khói to nhất */
+.env-gas-card-content {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  height: 100%;
+}
+
+.env-ring-gauge-wrap {
+  position: relative;
+  width: 106px;
+  height: 106px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.env-ring-svg {
+  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
+}
+
+.env-ring-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.env-ring-val {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 1.65rem;
   font-weight: 700;
-  color: #111827;
-  margin: 0.25rem 0;
+  line-height: 1.1;
+  color: var(--env-text-main);
+}
+
+.env-ring-unit {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--env-text-sub);
+  letter-spacing: 0.05em;
+}
+
+.env-gas-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.env-gas-title {
+  font-size: 0.85rem;
+  color: var(--env-text-sub);
+  margin: 0;
+}
+
+.env-gas-status {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0;
   line-height: 1.2;
 }
 
-.env-card-value.warn { color: #d97706; }
-.env-card-value.danger { color: #dc2626; }
-.env-card-value.safe { color: #059669; }
+.env-gas-status.status-safe { color: var(--env-color-safe); }
+.env-gas-status.status-warn { color: var(--env-color-warn); }
+.env-gas-status.status-danger { color: var(--env-color-danger); }
+.env-gas-status.status-warmup { color: var(--env-color-cyan); }
+.env-gas-status.status-offline { color: var(--env-text-muted); }
 
-.env-card-sub {
-  font-size: 0.8rem;
-  color: #6b7280;
+.env-gas-thresholds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--env-text-muted);
+  line-height: 1.3;
+}
+
+/* Các thẻ Nhiệt độ & Độ ẩm */
+.env-metric-large {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.5rem 0;
+}
+
+.env-metric-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 2.15rem;
+  font-weight: 700;
+  color: var(--env-text-main);
+  line-height: 1;
+}
+
+.env-metric-unit {
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: var(--env-text-sub);
+}
+
+.env-sparkline-wrap {
+  width: 100%;
+  height: 26px;
+  margin: 0.3rem 0;
+}
+
+.env-card-subtext {
+  font-size: 0.775rem;
+  color: var(--env-text-sub);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* Thẻ Còi báo động */
+.env-buzzer-status-txt {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--env-text-main);
+  margin: 0.35rem 0 0.2rem 0;
+}
+
+.env-buzzer-status-txt.active {
+  color: var(--env-color-danger);
+}
+
+.env-buzzer-sub {
+  font-size: 0.75rem;
+  color: var(--env-text-muted);
+  margin: 0 0 0.85rem 0;
+}
+
+.env-btn-buzzer-test {
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--env-radius-sm);
+  background: #17243b;
+  border: 1px solid var(--env-card-border);
+  color: var(--env-text-main);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.env-btn-buzzer-test:hover:not(:disabled) {
+  background: #203152;
+  border-color: #314672;
+}
+
+.env-btn-buzzer-test:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* -----------------------------------------------------------------------------
+   3. HÀNG 2 CỘT (Biểu đồ 24h & Khung Điều khiển / Mô phỏng) - Tỉ lệ 1.7 : 1
+   ----------------------------------------------------------------------------- */
+.env-middle-grid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: var(--env-gap);
+}
+
+.env-chart-card {
+  background: var(--env-card-bg);
+  border: 1px solid var(--env-card-border);
+  border-radius: var(--env-radius-card);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.env-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.env-section-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--env-text-main);
   margin: 0;
 }
 
-/* Gas Level Meter */
-.env-meter-container {
-  margin-top: 0.75rem;
+.env-chart-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: #0d1524;
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--env-card-border);
 }
 
-.env-meter-bar {
-  height: 8px;
-  background: #e5e7eb;
-  border-radius: 4px;
-  overflow: hidden;
+.env-chart-tab-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--env-text-sub);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 32px;
+}
+
+.env-chart-tab-btn:hover {
+  color: var(--env-text-main);
+}
+
+.env-chart-tab-btn.active {
+  background: #14352a;
+  color: var(--env-color-safe);
+  font-weight: 600;
+}
+
+.env-chart-body {
   position: relative;
+  width: 100%;
+  min-height: 200px;
 }
 
-.env-meter-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.4s ease, background-color 0.4s ease;
+.env-chart-svg {
+  width: 100%;
+  height: 220px;
+  overflow: visible;
 }
 
-.env-meter-markers {
+/* Khung Điều khiển & Mô phỏng */
+.env-control-card {
+  background: var(--env-card-bg);
+  border: 1px solid var(--env-card-border);
+  border-radius: var(--env-radius-card);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.env-control-sub {
+  font-size: 0.775rem;
+  color: var(--env-text-muted);
+  margin: -0.85rem 0 0 0;
+}
+
+.env-sim-button-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.45rem;
+  background: #0d1524;
+  padding: 0.35rem;
+  border-radius: 10px;
+  border: 1px solid var(--env-card-border);
+}
+
+.env-sim-btn {
+  min-height: 44px;
+  padding: 0.5rem 0.35rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--env-text-sub);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.env-sim-btn:hover {
+  color: var(--env-text-main);
+  background: #152238;
+}
+
+.env-sim-btn.active-safe {
+  background: #13382d;
+  border-color: var(--env-color-safe);
+  color: var(--env-color-safe);
+}
+
+.env-sim-btn.active-warn {
+  background: #382d11;
+  border-color: var(--env-color-warn);
+  color: var(--env-color-warn);
+}
+
+.env-sim-btn.active-danger {
+  background: #3b1717;
+  border-color: var(--env-color-danger);
+  color: var(--env-color-danger);
+}
+
+/* Slider ngưỡng gas */
+.env-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.env-slider-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.7rem;
-  color: #9ca3af;
-  margin-top: 0.25rem;
+  align-items: center;
+  font-size: 0.825rem;
 }
 
-/* Activity & Protection Section */
-.env-two-column {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 1.25rem;
+.env-slider-label {
+  color: var(--env-text-sub);
 }
 
-@media (max-width: 860px) {
-  .env-two-column {
-    grid-template-columns: 1fr;
-  }
+.env-slider-val {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--env-text-main);
 }
 
-.env-panel {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+.env-range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #1d2b45;
+  outline: none;
+  accent-color: var(--env-color-safe);
+  cursor: pointer;
+}
+
+/* Các nút hành động Tắt tiếng & Lưu */
+.env-control-actions {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.env-btn-mute {
+  flex: 1;
+  min-height: 44px;
+  border-radius: var(--env-radius-sm);
+  background: #162238;
+  border: 1px solid var(--env-card-border);
+  color: var(--env-text-main);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.env-btn-mute:hover {
+  background: #1f3050;
+}
+
+.env-btn-mute.is-muted {
+  background: #2a2012;
+  border-color: var(--env-color-warn);
+  color: var(--env-color-warn);
+}
+
+.env-btn-save {
+  min-height: 44px;
+  padding: 0 1.5rem;
+  border-radius: var(--env-radius-sm);
+  background: var(--env-color-safe);
+  border: none;
+  color: #0b1220;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.env-btn-save:hover {
+  opacity: 0.9;
+}
+
+/* Hộp checklist "Khi có báo gas" */
+.env-emergency-box {
+  background: var(--env-card-inner);
+  border: 1px solid var(--env-card-border);
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  transition: border-color 0.3s;
+}
+
+.env-emergency-box.is-alert {
+  border-color: var(--env-color-danger);
+  background: #1c141d;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.25);
+}
+
+.env-emergency-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--env-text-sub);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.env-emergency-box.is-alert .env-emergency-title {
+  color: var(--env-color-danger);
+}
+
+.env-emergency-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.775rem;
+  color: var(--env-text-sub);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* -----------------------------------------------------------------------------
+   4. HÀNG 3 CỘT BẰNG NHAU (Nhật ký, Hỏi đáp không khí, Chẩn đoán phần cứng)
+   ----------------------------------------------------------------------------- */
+.env-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--env-gap);
+}
+
+.env-panel-card {
+  background: var(--env-card-bg);
+  border: 1px solid var(--env-card-border);
+  border-radius: var(--env-radius-card);
+  padding: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .env-panel-header {
@@ -211,79 +682,272 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  border-bottom: 1px solid #f3f4f6;
-  padding-bottom: 0.75rem;
 }
 
-.env-panel-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0;
-}
-
-.env-event-list {
+/* Cột 1: Nhật ký sự kiện */
+.env-events-scroll {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 240px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.85rem;
+  max-height: 250px;
+  overflow-y: auto;
 }
 
-.env-event-item {
+.env-event-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  background: #f9fafb;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.env-event-bullet {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.env-event-bullet.bullet-warn { background-color: var(--env-color-warn); box-shadow: 0 0 6px var(--env-color-warn); }
+.env-event-bullet.bullet-safe { background-color: var(--env-color-safe); box-shadow: 0 0 6px var(--env-color-safe); }
+.env-event-bullet.bullet-danger { background-color: var(--env-color-danger); box-shadow: 0 0 6px var(--env-color-danger); }
+.env-event-bullet.bullet-info { background-color: var(--env-color-blue); }
+
+.env-event-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.env-event-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--env-text-main);
+  line-height: 1.3;
+}
+
+.env-event-meta {
+  font-size: 0.75rem;
+  color: var(--env-text-muted);
+}
+
+.env-empty-box {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--env-text-muted);
   font-size: 0.825rem;
 }
 
-.env-event-item.is-alert {
-  background: #fef2f2;
-  border-left: 3px solid #ef4444;
-}
-
-.env-event-item.is-warn {
-  background: #fffbeb;
-  border-left: 3px solid #f59e0b;
-}
-
-.env-event-code {
-  font-weight: 600;
-  color: #111827;
-}
-
-.env-event-time {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.env-empty-events {
-  padding: 1.5rem;
-  text-align: center;
-  color: #9ca3af;
-  font-size: 0.875rem;
-}
-
-.env-hardware-info {
+/* Cột 2: Hỏi nhanh về không khí */
+.env-ai-chat-area {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  font-size: 0.85rem;
+  margin-bottom: 0.9rem;
 }
 
-.env-info-row {
+.env-chat-bubble-user {
+  align-self: flex-end;
+  background: #17243c;
+  border: 1px solid #243555;
+  color: var(--env-text-main);
+  padding: 0.5rem 0.85rem;
+  border-radius: 14px 14px 2px 14px;
+  font-size: 0.825rem;
+  max-width: 85%;
+}
+
+.env-chat-bubble-ai {
+  align-self: flex-start;
+  background: #0d2223;
+  border: 1px solid #1a423e;
+  color: #c9ece4;
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px 14px 14px 2px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.env-quick-prompts-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+}
+
+.env-prompt-pill {
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  background: #131d31;
+  border: 1px solid var(--env-card-border);
+  color: var(--env-text-sub);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.env-prompt-pill:hover {
+  background: #1c2b48;
+  color: var(--env-text-main);
+}
+
+/* Cột 3: Chẩn đoán phần cứng */
+.env-diag-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.825rem;
+}
+
+.env-diag-row {
   display: flex;
   justify-content: space-between;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px dashed #e5e7eb;
+  align-items: center;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #162238;
 }
 
-.env-info-label { color: #6b7280; }
-.env-info-value { font-weight: 600; color: #1f2937; }
+.env-diag-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
 
+.env-diag-label {
+  color: var(--env-text-sub);
+}
+
+.env-diag-val {
+  font-weight: 600;
+  color: var(--env-text-main);
+  text-align: right;
+}
+
+.env-diag-val.text-green { color: var(--env-color-safe); }
+.env-diag-val.text-warn { color: var(--env-color-warn); }
+
+/* -----------------------------------------------------------------------------
+   5. MODAL THÔNG TIN KỸ THUẬT (POPUP / DRAWER)
+   ----------------------------------------------------------------------------- */
+.env-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 16, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.env-modal-card {
+  background: var(--env-card-bg);
+  border: 1px solid var(--env-card-border);
+  border-radius: var(--env-radius-card);
+  max-width: 520px;
+  width: 100%;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.env-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--env-card-border);
+  padding-bottom: 0.75rem;
+}
+
+.env-modal-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--env-text-main);
+  margin: 0;
+}
+
+.env-modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--env-text-sub);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.env-topic-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: #0c1424;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #1a2741;
+}
+
+.env-topic-name {
+  font-size: 0.75rem;
+  color: var(--env-text-sub);
+}
+
+.env-topic-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--env-color-cyan);
+}
+
+/* -----------------------------------------------------------------------------
+   6. RESPONSIVE DESIGN (Dưới 960px & 640px)
+   ----------------------------------------------------------------------------- */
+@media (max-width: 960px) {
+  .env-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .env-middle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .env-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .env-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .env-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .env-header-right {
+    justify-content: space-between;
+  }
+
+  .env-chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .env-chart-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .env-chart-tab-btn {
+    flex: 1;
+    text-align: center;
+  }
+}
