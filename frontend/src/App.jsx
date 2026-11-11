@@ -55,24 +55,6 @@ function ProtectedRoute({ children }) {
             >
               {t('btn_retry')}
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                try {
-                  localStorage.setItem('shp_auth_session', JSON.stringify({
-                    id: 'usr_preview',
-                    name: 'Quỳnh (Kỹ sư IoT)',
-                    email: 'quynh@smarthome.local',
-                    role: 'admin',
-                    owned: ['environment-sensor', 'smart-door-lock', 'smart-speaker', 'window-sensor', 'smart-plug']
-                  }));
-                } catch {}
-                window.location.reload();
-              }}
-            >
-              Vào xem trước giao diện
-            </button>
           </div>
         </div>
       </div>

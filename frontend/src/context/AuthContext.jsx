@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { ROLES, findDemoAccount } from '../shared/roles.js';
 import {
   loginService,
+  verifyLoginService,
+  sendActivityService,
   registerService,
   getMeService,
   logoutService,
@@ -214,6 +216,7 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
 
   // Biến đếm thứ tự yêu cầu để chống phản hồi /me cũ ghi đè sau login/logout
   const activeSeqRef = useRef(0);
+  const idleRef = useRef({ userId: null, lastInput: Date.now(), lastSent: 0 });
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
 
@@ -336,6 +339,7 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
       remember: Boolean(remember)
     });
 
+    if (res.success && res.code === 'LOGIN_CODE_REQUIRED' && res.data?.challengeId) return res;
     if (!res.success || !res.data?.user || !isValidUserData(res.data.user)) {
       const errMsg = res.message || 'Phản hồi đăng nhập từ máy chủ không hợp lệ.';
       setAuthError(errMsg);
@@ -355,6 +359,17 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     setAuthError(null);
     return res;
   }, [enableDemoAuth]);
+
+  const verifyLogin = useCallback(async (challengeId, code) => {
+    const res = await verifyLoginService(challengeId, code);
+    if (res.success && isValidUserData(res.data?.user)) {
+      activeSeqRef.current++;
+      setCurrentUser(res.data.user);
+      setIsCheckingSession(false);
+      setSessionError(null);
+    }
+    return res;
+  }, []);
 
   /**
    * Thao tác đăng ký tài khoản mới
@@ -424,6 +439,7 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
       password
     });
 
+    if (res.success && res.code === 'EMAIL_VERIFICATION_REQUIRED' && res.data?.challengeId) return res;
     if (!res.success || !res.data?.user || !isValidUserData(res.data.user)) {
       const errMsg = res.message || 'Phản hồi đăng ký từ máy chủ không hợp lệ.';
       setAuthError(errMsg);
@@ -501,6 +517,35 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     setSessionError(null);
   }, []);
 
+  useEffect(() => {
+    if (!currentUser || enableDemoAuth) return undefined;
+    if (idleRef.current.userId !== currentUser.id) idleRef.current = { userId: currentUser.id, lastInput: Date.now(), lastSent: 0 };
+    let busy = false;
+    const markActivity = () => { idleRef.current.lastInput = Date.now(); };
+    const tick = async () => {
+      if (busy) return;
+      if (Date.now() - idleRef.current.lastInput >= 15 * 60 * 1000) {
+        handleUnauthorized(currentUser.id);
+        await logoutService();
+        return;
+      }
+      if (Date.now() - idleRef.current.lastSent < 30_000) return;
+      if (idleRef.current.lastInput <= idleRef.current.lastSent) return;
+      busy = true;
+      const result = await sendActivityService();
+      idleRef.current.lastSent = Date.now();
+      busy = false;
+      if (result.status === 401) handleUnauthorized(currentUser.id);
+    };
+    for (const event of ['pointerdown', 'keydown', 'scroll']) window.addEventListener(event, markActivity, { passive: true });
+    const timer = window.setInterval(tick, 15_000);
+    tick();
+    return () => {
+      window.clearInterval(timer);
+      for (const event of ['pointerdown', 'keydown', 'scroll']) window.removeEventListener(event, markActivity);
+    };
+  }, [currentUser, enableDemoAuth, handleUnauthorized]);
+
   /**
    * Cập nhật thông tin hồ sơ cho tài khoản hiện tại (ví dụ: đổi tên đã được server xác nhận).
    * Giữ nguyên các trường xác thực và phân quyền (id, email, role, owned),
@@ -537,6 +582,7 @@ export function AuthProvider({ children, enableDemoAuth = false }) {
     isStorageAvailable,
     dismissStorageNotice,
     login,
+    verifyLogin,
     register,
     logout,
     checkSession,

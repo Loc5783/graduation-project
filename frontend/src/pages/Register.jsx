@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { calculatePasswordStrength, useAuthContext } from '../context/AuthContext.jsx';
 import { useLanguage, getErrorMessage } from '../context/LanguageContext.jsx';
 import LanguageToggle from '../shared/components/LanguageToggle.jsx';
+import { verifyRegistrationService, resendCodeService } from '../services/authService.js';
 import {
   AuthBrandHeader,
   UserIcon,
@@ -44,6 +45,9 @@ export default function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverNotice, setServerNotice] = useState(null);
   const [isRegisterSuccess, setIsRegisterSuccess] = useState(false);
+  const [challengeId, setChallengeId] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
 
   // Refs để tự động focus vào trường lỗi đầu tiên
   const fullNameRef = useRef(null);
@@ -176,6 +180,13 @@ export default function Register() {
         confirmPassword: formData.confirmPassword
       });
 
+      if (result.success && result.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        setChallengeId(result.data.challengeId);
+        setVerificationEmail(formData.email.trim());
+        setFormData((previous) => ({ ...previous, password: '', confirmPassword: '' }));
+        return;
+      }
+
       if (result.success) {
         // Đăng ký thành công: xóa mật khẩu và thông tin khỏi state
         setFormData({
@@ -221,6 +232,24 @@ export default function Register() {
     }
   };
 
+  const handleVerifyEmail = async (event) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const result = await verifyRegistrationService(challengeId, emailCode);
+    setIsSubmitting(false);
+    if (result.success) setIsRegisterSuccess(true);
+    else setServerNotice({ type: 'danger', message: result.message || t('email_code_invalid') });
+  };
+
+  const handleResend = async () => {
+    const result = await resendCodeService(challengeId, 'register');
+    if (result.success) {
+      setChallengeId(result.data.challengeId);
+      setEmailCode('');
+      setServerNotice({ type: 'success', message: t('email_code_sent') });
+    } else setServerNotice({ type: 'warning', message: result.message || t('email_code_wait') });
+  };
+
   const strength = calculatePasswordStrength(formData.password);
   const strengthLabels = {
     1: t('strength_weak'),
@@ -250,6 +279,20 @@ export default function Register() {
       </div>
     );
   }
+
+  if (challengeId) return (
+    <div className="au-page-wrapper"><div className="au-card au-card-register">
+      <h1 className="au-title">{t('email_code_title')}</h1>
+      <p className="au-success-desc">{t('email_code_register_desc')} {verificationEmail}</p>
+      {serverNotice && <div className={`au-alert au-alert-${serverNotice.type}`} role="alert">{serverNotice.message}</div>}
+      <form className="au-form" onSubmit={handleVerifyEmail}>
+        <label className="au-label" htmlFor="register-email-code">{t('email_code_label')}</label>
+        <input id="register-email-code" className="au-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={emailCode} onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, ''))} />
+        <button className="au-btn au-btn-primary" type="submit" disabled={isSubmitting}>{t('email_code_verify')}</button>
+        <button className="au-forgot-link" type="button" onClick={handleResend}>{t('email_code_resend')}</button>
+      </form>
+    </div></div>
+  );
 
   return (
     <div className="au-page-wrapper">

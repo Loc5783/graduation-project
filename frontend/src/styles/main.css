@@ -3737,7 +3737,8 @@ a:hover {
   flex: 1;
 }
 
-.security-card-title {
+.security-card-title,
+.security-extra-title {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--color-text-main);

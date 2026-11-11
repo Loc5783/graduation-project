@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, me, logout } from '../controllers/authController.js';
+import { register, login, me, logout, verifyRegistration, verifyLogin, resendCode, securityStatus, startMfaChange, finishMfaChange } from '../controllers/authController.js';
 import requireAuth from '../middleware/auth.js';
 import verifyOrigin from '../middleware/csrf.js';
 import authRateLimiter from '../middleware/rateLimiter.js';
@@ -19,6 +19,13 @@ export function createAuthRouter(options = {}) {
 
   // Đăng nhập: kiểm tra nguồn, bắt buộc JSON, giới hạn tần suất
   router.post('/login', originMiddleware, jsonMiddleware, limiterMiddleware, login);
+  router.post('/register/verify', originMiddleware, jsonMiddleware, limiterMiddleware, verifyRegistration);
+  router.post('/login/verify', originMiddleware, jsonMiddleware, limiterMiddleware, verifyLogin);
+  router.post('/code/resend', originMiddleware, jsonMiddleware, limiterMiddleware, resendCode);
+  router.get('/security', requireAuth, securityStatus);
+  router.post('/security/challenge', originMiddleware, jsonMiddleware, limiterMiddleware, requireAuth, startMfaChange);
+  router.post('/security/verify', originMiddleware, jsonMiddleware, limiterMiddleware, requireAuth, finishMfaChange);
+  router.post('/activity', originMiddleware, jsonMiddleware, requireAuth, (req, res) => res.json({ success: true }));
 
   // Lấy thông tin tài khoản: yêu cầu session đăng nhập hợp lệ
   router.get('/me', requireAuth, me);

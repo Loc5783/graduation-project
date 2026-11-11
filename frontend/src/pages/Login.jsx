@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext.jsx';
 import { useLanguage, getErrorMessage } from '../context/LanguageContext.jsx';
 import LanguageToggle from '../shared/components/LanguageToggle.jsx';
+import { resendCodeService } from '../services/authService.js';
 import {
   AuthBrandHeader,
   MailIcon,
@@ -17,7 +18,7 @@ import {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Login() {
-  const { login } = useAuthContext();
+  const { login, verifyLogin } = useAuthContext();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,6 +49,8 @@ export default function Login() {
     return null;
   });
   const [showForgotNotice, setShowForgotNotice] = useState(false);
+  const [challengeId, setChallengeId] = useState('');
+  const [emailCode, setEmailCode] = useState('');
 
   // Refs để tự động focus vào trường lỗi đầu tiên
   const emailRef = useRef(null);
@@ -135,6 +138,12 @@ export default function Login() {
         remember: Boolean(formData.remember)
       });
 
+      if (result.success && result.code === 'LOGIN_CODE_REQUIRED') {
+        setChallengeId(result.data.challengeId);
+        setFormData((previous) => ({ ...previous, password: '' }));
+        return;
+      }
+
       if (result.success) {
         // Đăng nhập thành công: chuyển hướng vào dashboard hoặc trang trước đó
         const destination = location.state?.from?.pathname || '/overview';
@@ -158,6 +167,26 @@ export default function Login() {
     }
   };
 
+  const handleCodeSubmit = async (event) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setServerNotice(null);
+    try {
+      const result = await verifyLogin(challengeId, emailCode);
+      if (result.success) navigate(location.state?.from?.pathname || '/overview', { replace: true });
+      else setServerNotice({ type: 'danger', message: result.message || t('email_code_invalid') });
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handleResend = async () => {
+    const result = await resendCodeService(challengeId, 'login');
+    if (result.success) {
+      setChallengeId(result.data.challengeId);
+      setEmailCode('');
+      setServerNotice({ type: 'success', message: t('email_code_sent') });
+    } else setServerNotice({ type: 'warning', message: result.message || t('email_code_wait') });
+  };
+
   return (
     <div className="au-page-wrapper">
       <div className="au-card au-card-login">
@@ -171,7 +200,8 @@ export default function Login() {
         </div>
 
         {/* Tiêu đề ngắn gọn */}
-        <h1 className="au-title">{t('login_title')}</h1>
+        <h1 className="au-title">{challengeId ? t('email_code_title') : t('login_title')}</h1>
+        {challengeId && <p className="au-success-desc">{t('email_code_login_desc')} {formData.email}</p>}
 
         {/* Thông báo lỗi từ máy chủ hoặc mạng */}
         {serverNotice && (
@@ -206,7 +236,17 @@ export default function Login() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="au-form" noValidate>
+        {challengeId ? (
+          <form onSubmit={handleCodeSubmit} className="au-form">
+            <div className="au-form-group">
+              <label htmlFor="login-email-code" className="au-label">{t('email_code_label')}</label>
+              <input id="login-email-code" className="au-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={emailCode} onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, ''))} />
+            </div>
+            <button className="au-btn au-btn-primary" disabled={isSubmitting} type="submit">{t('email_code_verify')}</button>
+            <button className="au-forgot-link" type="button" onClick={handleResend}>{t('email_code_resend')}</button>
+            <button className="au-forgot-link" type="button" onClick={() => { setChallengeId(''); setEmailCode(''); }}>{t('email_code_back')}</button>
+          </form>
+        ) : <form onSubmit={handleSubmit} className="au-form" noValidate>
           {/* Trường Email */}
           <div className="au-form-group">
             <label htmlFor="email" className="au-label">
@@ -312,7 +352,7 @@ export default function Login() {
           >
             {isSubmitting ? t('btn_logging_in') : t('btn_login')}
           </button>
-        </form>
+        </form>}
 
         <footer className="au-footer">
           {t('no_account')}{' '}

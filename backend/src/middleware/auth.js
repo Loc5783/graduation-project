@@ -99,8 +99,20 @@ export async function requireAuth(req, res, next) {
       });
     }
 
+    // Chỉ hoạt động do người dùng tạo mới gia hạn phiên; polling nền không gia hạn.
+    const nowMs = Date.now();
+    const lastUserActivity = Number(req.session.lastUserActivityAt || 0);
+    if (lastUserActivity && nowMs - lastUserActivity > 15 * 60 * 1000) {
+      if (req.session.managedSessionId) await UserSession.updateOne({ sessionId: req.session.managedSessionId }, { $set: { isRevoked: true, revokedAt: new Date() } });
+      req.session.destroy(() => {});
+      res.clearCookie('shp_sid', COOKIE_OPTIONS);
+      return res.status(401).json({ success: false, code: 'SESSION_IDLE_TIMEOUT', message: 'Phiên đã hết hạn do không hoạt động trong 15 phút.' });
+    }
+    if (req.path === '/activity' && req.baseUrl === '/api/auth') req.session.lastUserActivityAt = nowMs;
+
     // Khi cơ sở dữ liệu MongoDB ngoại tuyến (offline memory mode)
     if (mongoose.connection.readyState !== 1) {
+      if (process.env.NODE_ENV === 'production') return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE' });
       if (req.session.mockUser) {
         req.user = req.session.mockUser;
         return next();
@@ -172,8 +184,8 @@ export async function requireAuth(req, res, next) {
         req.session.managedSessionId = sessionRecord.sessionId;
       }
 
-      // 2.3 Cập nhật lastActiveAt có giãn cách (thao tác tối ưu: chỉ ghi khi đã qua ít nhất 60s)
-      if (sessionRecord.lastActiveAt && (now.getTime() - sessionRecord.lastActiveAt.getTime() > 60000)) {
+      // Chỉ ghi hoạt động người dùng, không ghi từ polling nền.
+      if (req.path === '/activity' && req.baseUrl === '/api/auth' && sessionRecord.lastActiveAt && (now.getTime() - sessionRecord.lastActiveAt.getTime() > 30000)) {
         UserSession.updateOne(
           { _id: sessionRecord._id },
           { $set: { lastActiveAt: now } }

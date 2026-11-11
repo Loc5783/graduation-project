@@ -165,6 +165,7 @@ export async function registerService({ fullName, email, password } = {}, option
     return res;
   }
 
+  if (res.status === 202 && res.code === 'EMAIL_VERIFICATION_REQUIRED' && res.data?.challengeId) return res;
   // HTTP 201 thành công bắt buộc phải có data.user hợp lệ
   if (!res.data || typeof res.data !== 'object' || !isValidUserData(res.data.user)) {
     return {
@@ -208,6 +209,7 @@ export async function loginService({ email, password, remember = false } = {}, o
     return res;
   }
 
+  if (res.status === 202 && res.code === 'LOGIN_CODE_REQUIRED' && res.data?.challengeId) return res;
   // HTTP 200 thành công bắt buộc phải có data.user hợp lệ (không chỉ kiểm tra truthy)
   if (!res.data || typeof res.data !== 'object' || !isValidUserData(res.data.user)) {
     return {
@@ -222,6 +224,18 @@ export async function loginService({ email, password, remember = false } = {}, o
 
   return res;
 }
+
+function postJson(endpoint, body) {
+  return apiRequest(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+export const verifyRegistrationService = (challengeId, code) => postJson('/api/auth/register/verify', { challengeId, code });
+export const verifyLoginService = (challengeId, code) => postJson('/api/auth/login/verify', { challengeId, code });
+export const resendCodeService = (challengeId, purpose) => postJson('/api/auth/code/resend', { challengeId, purpose });
+export const getSecurityStatusService = () => apiRequest('/api/auth/security');
+export const startMfaChangeService = (enabled, password) => postJson('/api/auth/security/challenge', { enabled, password });
+export const finishMfaChangeService = (challengeId, code, purpose) => postJson('/api/auth/security/verify', { challengeId, code, purpose });
+export const sendActivityService = () => postJson('/api/auth/activity', {});
 
 /**
  * Kiểm tra và lấy thông tin phiên làm việc hiện tại (GET /api/auth/me)

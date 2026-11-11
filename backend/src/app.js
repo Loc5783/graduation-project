@@ -6,6 +6,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import User from './models/User.js';
 import UserSession from './models/UserSession.js';
+import EmailChallenge from './models/EmailChallenge.js';
 import Notification from './models/Notification.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
@@ -27,6 +28,7 @@ import { smartPlugRoutes } from '../modules/smart-plug/smartPlugRoutes.js';
  */
 export async function createApp(options = {}) {
   const app = express();
+  if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
   // Đảm bảo SESSION_SECRET tồn tại, không dùng chuỗi mặc định tĩnh
   const sessionSecret = options.sessionSecret || process.env.SESSION_SECRET;
@@ -60,6 +62,7 @@ export async function createApp(options = {}) {
     }
     try {
       await User.init();
+      await EmailChallenge.init();
       console.log('[Database] Chỉ mục Unique Index email của User đã sẵn sàng.');
     } catch (indexError) {
       throw new Error(`Khởi tạo chỉ mục Unique Index email thất bại: ${indexError.message}`);
