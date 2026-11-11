@@ -16,7 +16,7 @@ vi.mock('../src/services/emailAuth.js', () => ({
 import User from '../src/models/User.js';
 import UserSession from '../src/models/UserSession.js';
 import { issueEmailChallenge, consumeEmailChallenge } from '../src/services/emailAuth.js';
-import { register, login, verifyRegistration, verifyLogin, finishMfaChange } from '../src/controllers/authController.js';
+import { register, login, verifyRegistration, verifyLogin, securityStatus } from '../src/controllers/authController.js';
 
 const originalNodeEnv = process.env.NODE_ENV;
 const userId = '507f1f77bcf86cd799439011';
@@ -59,6 +59,16 @@ describe('email authentication controller', () => {
     expect(UserSession.create).not.toHaveBeenCalled();
   });
 
+  it('also requires the email code for an existing account with MFA previously off', async () => {
+    const passwordHash = await bcrypt.hash('password123', 4);
+    User.findOne.mockResolvedValue({ _id: userId, passwordHash, emailVerificationRequired: false, mfaEnabled: false, authVersion: 0 });
+    const res = response();
+    await login({ body: { email: 'existing@example.com', password: 'password123' } }, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json.mock.calls[0][0].code).toBe('LOGIN_CODE_REQUIRED');
+    expect(UserSession.create).not.toHaveBeenCalled();
+  });
+
   it('marks the new account verified only after the registration code', async () => {
     consumeEmailChallenge.mockResolvedValue({ userId });
     User.findOneAndUpdate.mockResolvedValue({ id: userId, name: 'New User', email: 'user@example.com', role: 'viewer', owned: [] });
@@ -70,24 +80,21 @@ describe('email authentication controller', () => {
 
   it('creates the MongoDB-backed session only after a valid login code', async () => {
     consumeEmailChallenge.mockResolvedValue({ userId, authVersion: 0, remember: false });
-    User.findById.mockResolvedValue({ _id: userId, name: 'New User', email: 'user@example.com', role: 'viewer', owned: [], mfaEnabled: true, authVersion: 0, emailVerificationRequired: false });
+    User.findById.mockResolvedValue({ _id: userId, name: 'Existing User', email: 'user@example.com', role: 'viewer', owned: [], mfaEnabled: false, authVersion: 0, emailVerificationRequired: false });
     const session = { cookie: {}, regenerate: vi.fn((callback) => callback()), save: vi.fn((callback) => callback()) };
     const req = { body: { challengeId: 'challenge-id', code: '123456' }, session, sessionID: 'store-id', headers: {} };
     const res = response();
     await verifyLogin(req, res, vi.fn());
     await vi.waitFor(() => expect(res.status).toHaveBeenCalledWith(200));
     expect(UserSession.create).toHaveBeenCalledOnce();
+    expect(session.emailSecondFactorVerifiedAt).toBeTypeOf('number');
+    expect(User.updateOne).toHaveBeenCalledWith({ _id: userId }, { $set: { emailVerifiedAt: expect.any(Date), mfaEnabled: true } });
     expect(session.lastUserActivityAt).toBeTypeOf('number');
   });
 
-  it('enables two-step verification for a legacy account after its email code', async () => {
-    consumeEmailChallenge.mockResolvedValue({ userId, authVersion: 0 });
-    User.updateOne.mockResolvedValue({ modifiedCount: 1 });
-    UserSession.updateMany.mockResolvedValue({ modifiedCount: 0 });
+  it('reports the server-wide email code requirement even for a legacy account', async () => {
     const res = response();
-    await finishMfaChange({ body: { challengeId: 'challenge-id', code: '123456', purpose: 'enable_mfa' }, user: { _id: userId }, sessionID: 'current-store' }, res, vi.fn());
-    expect(User.updateOne.mock.calls[0][0].$and).toContainEqual({ mfaEnabled: { $ne: true } });
-    expect(User.updateOne.mock.calls[0][1].$set).toMatchObject({ mfaEnabled: true, emailVerificationRequired: false });
-    expect(res.json.mock.calls[0][0].data.mfaEnabled).toBe(true);
+    await securityStatus({ user: { mfaEnabled: false } }, res);
+    expect(res.json.mock.calls[0][0].data).toMatchObject({ mfaEnabled: true, mfaRequired: true });
   });
 });

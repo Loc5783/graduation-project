@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
-import EmailChallenge from '../models/EmailChallenge.js';
 import { emailAuthEnabled, issueEmailChallenge, consumeEmailChallenge, resendEmailChallenge } from '../services/emailAuth.js';
 import parseUserAgent from '../utils/userAgentParser.js';
 
@@ -149,8 +148,8 @@ export async function verifyLogin(req, res, next) {
     const challenge = await consumeEmailChallenge(req.body?.challengeId, req.body?.code, 'login');
     if (!challenge) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
     const user = await User.findById(challenge.userId);
-    if (!user || user.emailVerificationRequired || !user.mfaEnabled || (user.authVersion || 0) !== challenge.authVersion) return res.status(401).json({ success: false, code: 'UNAUTHORIZED', message: 'Tài khoản không còn hợp lệ.' });
-    if (!user.emailVerifiedAt) await User.updateOne({ _id: user._id }, { $set: { emailVerifiedAt: new Date() } });
+    if (!user || user.emailVerificationRequired || (user.authVersion || 0) !== challenge.authVersion) return res.status(401).json({ success: false, code: 'UNAUTHORIZED', message: 'Tài khoản không còn hợp lệ.' });
+    if (!user.emailVerifiedAt || !user.mfaEnabled) await User.updateOne({ _id: user._id }, { $set: { emailVerifiedAt: new Date(), mfaEnabled: true } });
     req.verifiedLogin = { user };
     req.body = { remember: challenge.remember };
     return login(req, res, next);
@@ -160,11 +159,7 @@ export async function verifyLogin(req, res, next) {
 export async function resendCode(req, res, next) {
   try {
     const purpose = req.body?.purpose;
-    if (!['register', 'login', 'enable_mfa', 'disable_mfa'].includes(purpose)) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR' });
-    const challenge = await EmailChallenge.findOne({ challengeId: req.body?.challengeId, purpose });
-    if (['enable_mfa', 'disable_mfa'].includes(purpose) && (!req.session?.userId || String(challenge?.userId) !== String(req.session.userId))) {
-      return res.status(401).json({ success: false, code: 'UNAUTHORIZED' });
-    }
+    if (!['register', 'login'].includes(purpose)) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR' });
     const result = await resendEmailChallenge(req.body?.challengeId, purpose);
     if (!result) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Yêu cầu mã đã hết hạn.' });
     if (result.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN', message: 'Vui lòng chờ 60 giây trước khi gửi lại.' });
@@ -173,41 +168,7 @@ export async function resendCode(req, res, next) {
 }
 
 export async function securityStatus(req, res) {
-  return res.json({ success: true, data: { mfaEnabled: Boolean(req.user.mfaEnabled), idleTimeoutMinutes: 15 } });
-}
-
-export async function startMfaChange(req, res, next) {
-  try {
-    const { enabled, password } = req.body || {};
-    if (typeof enabled !== 'boolean' || typeof password !== 'string') return res.status(400).json({ success: false, code: 'VALIDATION_ERROR' });
-    if (!emailAuthEnabled()) return res.status(503).json({ success: false, code: 'EMAIL_NOT_CONFIGURED' });
-    if (enabled === Boolean(req.user.mfaEnabled)) return res.status(400).json({ success: false, code: 'NO_CHANGE' });
-    if (!await bcrypt.compare(password, req.user.passwordHash)) return res.status(401).json({ success: false, code: 'INVALID_CREDENTIALS' });
-    const purpose = enabled ? 'enable_mfa' : 'disable_mfa';
-    const challenge = await issueEmailChallenge(req.user, purpose);
-    if (challenge.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN' });
-    return res.status(202).json({ success: true, data: { ...challenge, purpose } });
-  } catch (error) { next(error); }
-}
-
-export async function finishMfaChange(req, res, next) {
-  try {
-    const purpose = req.body?.purpose;
-    if (!['enable_mfa', 'disable_mfa'].includes(purpose)) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR' });
-    const challenge = await consumeEmailChallenge(req.body?.challengeId, req.body?.code, purpose);
-    if (!challenge || String(challenge.userId) !== String(req.user._id)) return res.status(400).json({ success: false, code: 'INVALID_CODE' });
-    const enabled = purpose === 'enable_mfa';
-    const versionFilter = challenge.authVersion > 0
-      ? { authVersion: challenge.authVersion }
-      : { $or: [{ authVersion: { $exists: false } }, { authVersion: null }, { authVersion: 0 }] };
-    const update = await User.updateOne(
-      { _id: req.user._id, $and: [versionFilter, enabled ? { mfaEnabled: { $ne: true } } : { mfaEnabled: true }] },
-      { $set: { mfaEnabled: enabled, ...(enabled ? { emailVerifiedAt: new Date(), emailVerificationRequired: false } : {}) } }
-    );
-    if (update.modifiedCount !== 1) return res.status(409).json({ success: false, code: 'AUTH_CONFLICT', message: 'Thông tin bảo mật đã thay đổi. Vui lòng thử lại.' });
-    if (enabled) await UserSession.updateMany({ userId: req.user._id, sessionStoreId: { $ne: req.sessionID } }, { $set: { isRevoked: true, revokedAt: new Date() } });
-    return res.json({ success: true, data: { mfaEnabled: enabled } });
-  } catch (error) { next(error); }
+  return res.json({ success: true, data: { mfaEnabled: emailAuthEnabled(), mfaRequired: emailAuthEnabled(), idleTimeoutMinutes: 15 } });
 }
 
 function completeLogin(req, res, next, user, remember) {
@@ -219,6 +180,7 @@ function completeLogin(req, res, next, user, remember) {
 
       req.session.userId = user._id.toString();
       req.session.authVersion = typeof user.authVersion === 'number' ? user.authVersion : 0;
+      if (emailAuthEnabled()) req.session.emailSecondFactorVerifiedAt = Date.now();
       req.session.lastUserActivityAt = Date.now();
 
       // Cấu hình thời hạn phiên: 14 ngày nếu ghi nhớ, mặc định 1 ngày
@@ -401,7 +363,7 @@ export async function login(req, res, next) {
     if (emailAuthEnabled() && user.emailVerificationRequired && !user.emailVerifiedAt) {
       return res.status(403).json({ success: false, code: 'EMAIL_NOT_VERIFIED', message: 'Vui lòng xác minh email trước khi đăng nhập.' });
     }
-    if (emailAuthEnabled() && user.mfaEnabled && !req.verifiedLogin) {
+    if (emailAuthEnabled() && !req.verifiedLogin) {
       const challenge = await issueEmailChallenge(user, 'login', isRemember);
       if (challenge.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN', message: 'Vui lòng chờ 60 giây trước khi yêu cầu mã mới.' });
       return res.status(202).json({ success: true, code: 'LOGIN_CODE_REQUIRED', data: challenge });

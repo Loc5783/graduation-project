@@ -198,6 +198,7 @@ export async function changePassword(req, res, next) {
     // 6. Tái tạo session ID mới cho phiên hiện tại và cập nhật authVersion mới
     const newAuthVersion = typeof updatedUser.authVersion === 'number' ? updatedUser.authVersion : (currentVersion + 1);
     const currentCookieMaxAge = req.session?.cookie?.maxAge;
+    const emailSecondFactorVerifiedAt = req.session?.emailSecondFactorVerifiedAt;
 
     // Đánh dấu thu hồi tất cả phiên cũ của người dùng này trong UserSession
     try {
@@ -233,6 +234,7 @@ export async function changePassword(req, res, next) {
 
       req.session.userId = updatedUser._id.toString();
       req.session.authVersion = newAuthVersion;
+      if (emailSecondFactorVerifiedAt) req.session.emailSecondFactorVerifiedAt = emailSecondFactorVerifiedAt;
       req.session.lastUserActivityAt = Date.now();
       if (currentCookieMaxAge) {
         req.session.cookie.maxAge = currentCookieMaxAge;

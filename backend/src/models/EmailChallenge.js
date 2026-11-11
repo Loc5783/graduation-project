@@ -4,7 +4,7 @@ const schema = new mongoose.Schema({
   challengeId: { type: String, required: true, unique: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   authVersion: { type: Number, default: 0 },
-  purpose: { type: String, enum: ['register', 'login', 'enable_mfa', 'disable_mfa'], required: true },
+  purpose: { type: String, enum: ['register', 'login'], required: true },
   codeHash: { type: String, required: true },
   remember: { type: Boolean, default: false },
   attempts: { type: Number, default: 0 },

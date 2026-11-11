@@ -8,8 +8,7 @@ import {
   revokeSessionService,
   logoutAllSessionsService
 } from '../../services/accountService.js';
-import { isPreviewMode } from '../../services/authService.js';
-import { getSecurityStatusService, startMfaChangeService, finishMfaChangeService, resendCodeService } from '../../services/authService.js';
+import { isPreviewMode, getSecurityStatusService } from '../../services/authService.js';
 import { formatDateTime } from '../../shared/dateTimeFormatter.js';
 import { CloseIcon, AlertCircleIcon } from '../../shared/components/AuthIcons.jsx';
 
@@ -87,26 +86,14 @@ export default function SecuritySettings() {
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null); // { type: 'success' | 'warning' | 'danger', key?: string, text?: string }
   const [mfaEnabled, setMfaEnabled] = useState(null);
-  const [mfaPassword, setMfaPassword] = useState('');
-  const [mfaCode, setMfaCode] = useState('');
-  const [mfaChallenge, setMfaChallenge] = useState(null);
-  const [mfaBusy, setMfaBusy] = useState(false);
-  const [mfaMessage, setMfaMessage] = useState('');
   const [mfaLoadError, setMfaLoadError] = useState(false);
   const [mfaReloadKey, setMfaReloadKey] = useState(0);
   const mfaUserIdRef = useRef(currentUser?.id);
   mfaUserIdRef.current = currentUser?.id;
-  const mfaBusyRef = useRef(false);
 
   useEffect(() => {
     setMfaEnabled(null);
     setMfaLoadError(false);
-    setMfaChallenge(null);
-    setMfaCode('');
-    setMfaPassword('');
-    setMfaMessage('');
-    mfaBusyRef.current = false;
-    setMfaBusy(false);
     if (!currentUser?.id || isPreviewMode()) return;
     const userId = currentUser.id;
     let cancelled = false;
@@ -117,73 +104,6 @@ export default function SecuritySettings() {
     });
     return () => { cancelled = true; };
   }, [currentUser?.id, mfaReloadKey]);
-
-  const startMfa = async () => {
-    if (mfaBusyRef.current || typeof mfaEnabled !== 'boolean') return;
-    mfaBusyRef.current = true;
-    const userId = currentUser?.id;
-    setMfaBusy(true);
-    setMfaMessage('');
-    try {
-      const result = await startMfaChangeService(!mfaEnabled, mfaPassword);
-      if (mfaUserIdRef.current !== userId) return;
-      if (result.success) {
-        setMfaChallenge(result.data);
-        setMfaPassword('');
-        setMfaMessage(t('email_code_sent'));
-      } else setMfaMessage(result.message || t('security_mfa_error'));
-    } finally {
-      if (mfaUserIdRef.current === userId) {
-        mfaBusyRef.current = false;
-        setMfaBusy(false);
-      }
-    }
-  };
-
-  const finishMfa = async () => {
-    if (mfaBusyRef.current || !mfaChallenge) return;
-    mfaBusyRef.current = true;
-    const userId = currentUser?.id;
-    const challenge = mfaChallenge;
-    setMfaBusy(true);
-    try {
-      const result = await finishMfaChangeService(challenge.challengeId, mfaCode, challenge.purpose);
-      if (mfaUserIdRef.current !== userId) return;
-      if (result.success) {
-        setMfaEnabled(Boolean(result.data.mfaEnabled));
-        setMfaChallenge(null);
-        setMfaCode('');
-        setMfaMessage(t('security_mfa_saved'));
-      } else setMfaMessage(result.message || t('email_code_invalid'));
-    } finally {
-      if (mfaUserIdRef.current === userId) {
-        mfaBusyRef.current = false;
-        setMfaBusy(false);
-      }
-    }
-  };
-
-  const resendMfa = async () => {
-    if (mfaBusyRef.current || !mfaChallenge) return;
-    mfaBusyRef.current = true;
-    const userId = currentUser?.id;
-    const challenge = mfaChallenge;
-    setMfaBusy(true);
-    try {
-      const result = await resendCodeService(challenge.challengeId, challenge.purpose);
-      if (mfaUserIdRef.current !== userId) return;
-      if (result.success) {
-        setMfaChallenge({ ...challenge, ...result.data });
-        setMfaCode('');
-        setMfaMessage(t('email_code_sent'));
-      } else setMfaMessage(result.message || t('email_code_wait'));
-    } finally {
-      if (mfaUserIdRef.current === userId) {
-        mfaBusyRef.current = false;
-        setMfaBusy(false);
-      }
-    }
-  };
 
   // Hộp thoại xác nhận thu hồi một phiên
   const [revokingSession, setRevokingSession] = useState(null);
@@ -719,19 +639,8 @@ export default function SecuritySettings() {
           <p className="security-card-desc">{t('security_mfa_desc')}</p>
         </div></div>
         <div style={{ padding: '0 24px 24px' }}>
-          <p>{mfaEnabled === null ? mfaLoadError ? t('security_mfa_load_error') : t('security_mfa_loading') : mfaEnabled ? t('security_mfa_on') : t('security_mfa_off')}</p>
+          <p>{mfaEnabled === null ? mfaLoadError ? t('security_mfa_load_error') : t('security_mfa_loading') : mfaEnabled ? t('security_mfa_required') : t('security_mfa_unavailable')}</p>
           {mfaLoadError && <button type="button" className="btn btn-outline btn-sm" onClick={() => setMfaReloadKey((value) => value + 1)}>{t('security_btn_retry')}</button>}
-          {mfaMessage && <p role="status">{mfaMessage}</p>}
-          {mfaChallenge ? <div className="au-form-group">
-            <label className="au-label" htmlFor="security-email-code">{t('email_code_label')}</label>
-            <input id="security-email-code" className="au-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ''))} />
-            <button type="button" className="btn btn-primary" disabled={mfaBusy || mfaCode.length !== 6} onClick={finishMfa}>{t('email_code_verify')}</button>{' '}
-            <button type="button" className="btn btn-outline" disabled={mfaBusy} onClick={resendMfa}>{t('email_code_resend')}</button>
-          </div> : mfaEnabled !== null && <div className="au-form-group">
-            <label className="au-label" htmlFor="mfa-password">{t('security_mfa_password')}</label>
-            <input id="mfa-password" className="au-input" type="password" autoComplete="current-password" value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} />
-            <button type="button" className="btn btn-primary" disabled={mfaBusy || !mfaPassword} onClick={startMfa}>{mfaEnabled ? t('security_mfa_disable') : t('security_mfa_enable')}</button>
-          </div>}
         </div>
       </div>}
       {!isPreviewMode() && <div className="security-card" style={{ marginBottom: 24 }}>

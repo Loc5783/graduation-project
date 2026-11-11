@@ -211,7 +211,8 @@ describe('Giai đoạn 3B: Giao diện Quản lý Phiên Đăng nhập Thật (S
       const retry = [...container.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Thử lại');
       expect(retry).toBeDefined();
       await act(async () => { retry.click(); });
-      expect(container.textContent).toContain('Đang bật');
+      expect(container.textContent).toContain('Bắt buộc cho tất cả tài khoản');
+      expect(container.textContent).not.toContain('Tắt xác thực hai bước');
     });
 
     it('hiển thị danh sách phiên, badge phiên hiện tại và fallback đúng khi createdAt hoặc deviceLabel là null', async () => {

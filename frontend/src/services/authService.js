@@ -233,8 +233,6 @@ export const verifyRegistrationService = (challengeId, code) => postJson('/api/a
 export const verifyLoginService = (challengeId, code) => postJson('/api/auth/login/verify', { challengeId, code });
 export const resendCodeService = (challengeId, purpose) => postJson('/api/auth/code/resend', { challengeId, purpose });
 export const getSecurityStatusService = () => apiRequest('/api/auth/security');
-export const startMfaChangeService = (enabled, password) => postJson('/api/auth/security/challenge', { enabled, password });
-export const finishMfaChangeService = (challengeId, code, purpose) => postJson('/api/auth/security/verify', { challengeId, code, purpose });
 export const sendActivityService = () => postJson('/api/auth/activity', {});
 
 /**

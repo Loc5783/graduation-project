@@ -100,6 +100,13 @@ export async function requireAuth(req, res, next) {
       });
     }
 
+    if (emailAuthEnabled() && !req.session.emailSecondFactorVerifiedAt) {
+      if (req.session.managedSessionId) await UserSession.updateOne({ sessionId: req.session.managedSessionId }, { $set: { isRevoked: true, revokedAt: new Date() } });
+      req.session.destroy(() => {});
+      res.clearCookie('shp_sid', COOKIE_OPTIONS);
+      return res.status(401).json({ success: false, code: 'EMAIL_CODE_RELOGIN_REQUIRED', message: 'Vui lòng đăng nhập lại và xác nhận mã email.' });
+    }
+
     // Chỉ hoạt động do người dùng tạo mới gia hạn phiên; polling nền không gia hạn.
     const nowMs = Date.now();
     const lastUserActivity = Number(req.session.lastUserActivityAt || 0);

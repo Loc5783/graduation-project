@@ -28,8 +28,11 @@ Existing sessions created before this idle timeout feature must sign in again on
 On local development, set `EMAIL_AUTH_ENABLED=true` to exercise the email flow.
 
 New registrations receive a six-digit email code and remain unable to log in
-until verified. Newly registered and admin-created accounts have email two-step
-verification on by default; existing accounts can enable it in Settings → Security. Codes expire
+until verified. Every account, including accounts created before this feature,
+must enter an email code after the password at every login when email authentication
+is enabled. The code cannot be disabled per account. Existing accounts must have
+a deliverable email address before deployment. Sessions opened without an email
+code must sign in again after this policy is deployed. Codes expire
 after 10 minutes, permit five attempts and have a 60-second resend cooldown.
 Only an HMAC of each code is stored in MongoDB. Sessions end after 15 minutes
 without a user activity signal, even if background requests continue.
