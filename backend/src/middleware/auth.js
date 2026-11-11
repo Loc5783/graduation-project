@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
 import parseUserAgent from '../utils/userAgentParser.js';
+import { emailAuthEnabled } from '../services/emailAuth.js';
 
 const COOKIE_OPTIONS = {
   path: '/',
@@ -102,6 +103,12 @@ export async function requireAuth(req, res, next) {
     // Chỉ hoạt động do người dùng tạo mới gia hạn phiên; polling nền không gia hạn.
     const nowMs = Date.now();
     const lastUserActivity = Number(req.session.lastUserActivityAt || 0);
+    if (!lastUserActivity && process.env.NODE_ENV === 'production') {
+      if (req.session.managedSessionId) await UserSession.updateOne({ sessionId: req.session.managedSessionId }, { $set: { isRevoked: true, revokedAt: new Date() } });
+      req.session.destroy(() => {});
+      res.clearCookie('shp_sid', COOKIE_OPTIONS);
+      return res.status(401).json({ success: false, code: 'SESSION_RELOGIN_REQUIRED', message: 'Vui lòng đăng nhập lại để cập nhật bảo mật phiên.' });
+    }
     if (lastUserActivity && nowMs - lastUserActivity > 15 * 60 * 1000) {
       if (req.session.managedSessionId) await UserSession.updateOne({ sessionId: req.session.managedSessionId }, { $set: { isRevoked: true, revokedAt: new Date() } });
       req.session.destroy(() => {});
@@ -112,7 +119,7 @@ export async function requireAuth(req, res, next) {
 
     // Khi cơ sở dữ liệu MongoDB ngoại tuyến (offline memory mode)
     if (mongoose.connection.readyState !== 1) {
-      if (process.env.NODE_ENV === 'production') return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE' });
+      if (emailAuthEnabled()) return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE' });
       if (req.session.mockUser) {
         req.user = req.session.mockUser;
         return next();

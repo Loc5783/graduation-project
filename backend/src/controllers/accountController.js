@@ -233,6 +233,7 @@ export async function changePassword(req, res, next) {
 
       req.session.userId = updatedUser._id.toString();
       req.session.authVersion = newAuthVersion;
+      req.session.lastUserActivityAt = Date.now();
       if (currentCookieMaxAge) {
         req.session.cookie.maxAge = currentCookieMaxAge;
       }

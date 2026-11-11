@@ -12,6 +12,9 @@ export function assertEmailConfig() {
   for (const key of ['RESEND_API_KEY', 'EMAIL_FROM', 'SESSION_SECRET']) {
     if (!process.env[key]) throw new Error(`Thiếu cấu hình ${key} cho xác thực email.`);
   }
+  if (process.env.NODE_ENV === 'production' && Buffer.byteLength(process.env.SESSION_SECRET, 'utf8') < 32) {
+    throw new Error('SESSION_SECRET phải có ít nhất 32 byte trong môi trường production.');
+  }
 }
 
 function hashCode(challengeId, code) {
@@ -53,7 +56,7 @@ export async function consumeEmailChallenge(challengeId, code, purpose) {
   const hash = hashCode(challengeId, code);
   const challenge = await EmailChallenge.findOneAndUpdate(
     { challengeId, purpose, codeHash: hash, consumedAt: null, expiresAt: { $gt: now }, attempts: { $lt: MAX_ATTEMPTS } },
-    { $set: { consumedAt: now } }, { new: true }
+    { $set: { consumedAt: now } }, { returnDocument: 'after' }
   );
   if (challenge) return challenge;
   await EmailChallenge.updateOne(

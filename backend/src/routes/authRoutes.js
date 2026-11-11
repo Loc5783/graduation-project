@@ -21,7 +21,9 @@ export function createAuthRouter(options = {}) {
   router.post('/login', originMiddleware, jsonMiddleware, limiterMiddleware, login);
   router.post('/register/verify', originMiddleware, jsonMiddleware, limiterMiddleware, verifyRegistration);
   router.post('/login/verify', originMiddleware, jsonMiddleware, limiterMiddleware, verifyLogin);
-  router.post('/code/resend', originMiddleware, jsonMiddleware, limiterMiddleware, resendCode);
+  router.post('/code/resend', originMiddleware, jsonMiddleware, limiterMiddleware,
+    (req, res, next) => ['enable_mfa', 'disable_mfa'].includes(req.body?.purpose) ? requireAuth(req, res, next) : next(),
+    resendCode);
   router.get('/security', requireAuth, securityStatus);
   router.post('/security/challenge', originMiddleware, jsonMiddleware, limiterMiddleware, requireAuth, startMfaChange);
   router.post('/security/verify', originMiddleware, jsonMiddleware, limiterMiddleware, requireAuth, finishMfaChange);

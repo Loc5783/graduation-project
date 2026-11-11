@@ -17,6 +17,11 @@ import {
 // Regex kiểm tra định dạng email chuẩn
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export function safeDestination(pathname) {
+  if (typeof pathname !== 'string' || !pathname.startsWith('/') || pathname.startsWith('//') || pathname.includes('\\') || [...pathname].some((character) => character.charCodeAt(0) < 32) || /%(?:2f|5c)/i.test(pathname)) return '/overview';
+  return pathname;
+}
+
 export default function Login() {
   const { login, verifyLogin } = useAuthContext();
   const { t } = useLanguage();
@@ -146,7 +151,7 @@ export default function Login() {
 
       if (result.success) {
         // Đăng nhập thành công: chuyển hướng vào dashboard hoặc trang trước đó
-        const destination = location.state?.from?.pathname || '/overview';
+        const destination = safeDestination(location.state?.from?.pathname);
         navigate(destination, { replace: true });
       } else {
         // Phân biệt rõ lỗi mạng và sai thông tin, lưu code để hỗ trợ dịch động
@@ -173,7 +178,7 @@ export default function Login() {
     setServerNotice(null);
     try {
       const result = await verifyLogin(challengeId, emailCode);
-      if (result.success) navigate(location.state?.from?.pathname || '/overview', { replace: true });
+      if (result.success) navigate(safeDestination(location.state?.from?.pathname), { replace: true });
       else setServerNotice({ type: 'danger', message: result.message || t('email_code_invalid') });
     } finally { setIsSubmitting(false); }
   };

@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loginService, registerService, verifyLoginService, verifyRegistrationService } from '../services/authService.js';
+import { safeDestination } from '../pages/Login.jsx';
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 
 describe('email code authentication API', () => {
+  it('keeps post-login redirects inside the dashboard', () => {
+    expect(safeDestination('/settings/security')).toBe('/settings/security');
+    for (const path of ['//evil.example', '/\\evil.example', '/%5cevil.example', '/%2fevil.example', 'https://evil.example']) {
+      expect(safeDestination(path)).toBe('/overview');
+    }
+  });
   it('accepts registration and login challenges without treating them as malformed users', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 202, json: async () => ({ success: true, code: 'EMAIL_VERIFICATION_REQUIRED', data: { challengeId: 'registration-id' } }) })

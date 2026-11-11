@@ -8,7 +8,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 // Chỉ dùng khóa tạm trong môi trường phát triển cục bộ.
-if (!process.env.SESSION_SECRET && process.env.NODE_ENV !== 'production') {
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV !== 'production' && process.env.EMAIL_AUTH_ENABLED !== 'true') {
   process.env.SESSION_SECRET = 'df426817e903480c5785c4d2f0a3b7ec3844789295668fc0886f32b37f3ae3d6';
 }
 
@@ -26,13 +26,16 @@ async function startServer() {
   let isDbConnected = false;
 
   assertEmailConfig();
+  if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_URI || !process.env.ALLOWED_ORIGINS)) {
+    throw new Error('Production cần cấu hình MONGODB_URI và ALLOWED_ORIGINS.');
+  }
 
   try {
     // 1. Thử kết nối cơ sở dữ liệu MongoDB phát triển
     await connectDB(MONGODB_URI, 2);
     isDbConnected = true;
   } catch (dbErr) {
-    if (process.env.NODE_ENV === 'production') throw dbErr;
+    if (process.env.NODE_ENV === 'production' || process.env.EMAIL_AUTH_ENABLED === 'true') throw dbErr;
     console.warn(`[Database Warning] Không thể kết nối MongoDB (${MONGODB_URI}): ${dbErr.message}`);
     console.warn('[Database Warning] Backend tự động chạy ở chế độ Bộ nhớ tạm (MemoryStore fallback) để giữ API và MQTT Bridge hoạt động liên tục.');
   }

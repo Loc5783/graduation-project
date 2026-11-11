@@ -137,7 +137,7 @@ export async function verifyRegistration(req, res, next) {
     if (!challenge) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
     const user = await User.findOneAndUpdate(
       { _id: challenge.userId, emailVerificationRequired: true, emailVerifiedAt: null },
-      { $set: { emailVerifiedAt: new Date(), emailVerificationRequired: false } }, { new: true }
+      { $set: { emailVerifiedAt: new Date(), emailVerificationRequired: false } }, { returnDocument: 'after' }
     );
     if (!user) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
     return res.status(200).json({ success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, owned: user.owned } } });
@@ -150,6 +150,7 @@ export async function verifyLogin(req, res, next) {
     if (!challenge) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
     const user = await User.findById(challenge.userId);
     if (!user || user.emailVerificationRequired || !user.mfaEnabled || (user.authVersion || 0) !== challenge.authVersion) return res.status(401).json({ success: false, code: 'UNAUTHORIZED', message: 'Tài khoản không còn hợp lệ.' });
+    if (!user.emailVerifiedAt) await User.updateOne({ _id: user._id }, { $set: { emailVerifiedAt: new Date() } });
     req.verifiedLogin = { user };
     req.body = { remember: challenge.remember };
     return login(req, res, next);
@@ -196,7 +197,14 @@ export async function finishMfaChange(req, res, next) {
     const challenge = await consumeEmailChallenge(req.body?.challengeId, req.body?.code, purpose);
     if (!challenge || String(challenge.userId) !== String(req.user._id)) return res.status(400).json({ success: false, code: 'INVALID_CODE' });
     const enabled = purpose === 'enable_mfa';
-    await User.updateOne({ _id: req.user._id }, { $set: { mfaEnabled: enabled, ...(enabled ? { emailVerifiedAt: new Date(), emailVerificationRequired: false } : {}) } });
+    const versionFilter = challenge.authVersion > 0
+      ? { authVersion: challenge.authVersion }
+      : { $or: [{ authVersion: { $exists: false } }, { authVersion: null }, { authVersion: 0 }] };
+    const update = await User.updateOne(
+      { _id: req.user._id, $and: [versionFilter, enabled ? { mfaEnabled: { $ne: true } } : { mfaEnabled: true }] },
+      { $set: { mfaEnabled: enabled, ...(enabled ? { emailVerifiedAt: new Date(), emailVerificationRequired: false } : {}) } }
+    );
+    if (update.modifiedCount !== 1) return res.status(409).json({ success: false, code: 'AUTH_CONFLICT', message: 'Thông tin bảo mật đã thay đổi. Vui lòng thử lại.' });
     if (enabled) await UserSession.updateMany({ userId: req.user._id, sessionStoreId: { $ne: req.sessionID } }, { $set: { isRevoked: true, revokedAt: new Date() } });
     return res.json({ success: true, data: { mfaEnabled: enabled } });
   } catch (error) { next(error); }
@@ -325,7 +333,7 @@ export async function login(req, res, next) {
     const normalizedEmail = req.verifiedLogin ? '' : email.trim().toLowerCase();
 
     // Hỗ trợ chế độ offline (khi MongoDB không chạy trên máy phát triển)
-    if (!req.verifiedLogin && process.env.NODE_ENV !== 'production' && mongoose.connection.readyState !== 1) {
+    if (!req.verifiedLogin && !emailAuthEnabled() && mongoose.connection.readyState !== 1) {
       const demoAccounts = [
         { id: 'usr_admin', name: 'Quản trị viên hệ thống', email: 'admin@smarthome.local', role: 'admin', owned: [] },
         { id: 'usr_quynh', name: 'Đỗ Thúy Quỳnh', email: 'quynh@smarthome.local', role: 'member', owned: ['environment-sensor'] },

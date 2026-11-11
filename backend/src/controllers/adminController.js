@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { emailAuthEnabled } from '../services/emailAuth.js';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
@@ -202,7 +203,8 @@ export async function createUser(req, res, next) {
       email: cleanEmail,
       passwordHash,
       role,
-      owned: validOwned
+      owned: validOwned,
+      mfaEnabled: emailAuthEnabled()
     });
 
     try {

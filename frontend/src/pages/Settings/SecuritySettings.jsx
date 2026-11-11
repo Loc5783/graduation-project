@@ -92,47 +92,97 @@ export default function SecuritySettings() {
   const [mfaChallenge, setMfaChallenge] = useState(null);
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaMessage, setMfaMessage] = useState('');
+  const [mfaLoadError, setMfaLoadError] = useState(false);
+  const [mfaReloadKey, setMfaReloadKey] = useState(0);
+  const mfaUserIdRef = useRef(currentUser?.id);
+  mfaUserIdRef.current = currentUser?.id;
+  const mfaBusyRef = useRef(false);
 
   useEffect(() => {
+    setMfaEnabled(null);
+    setMfaLoadError(false);
+    setMfaChallenge(null);
+    setMfaCode('');
+    setMfaPassword('');
+    setMfaMessage('');
+    mfaBusyRef.current = false;
+    setMfaBusy(false);
     if (!currentUser?.id || isPreviewMode()) return;
+    const userId = currentUser.id;
     let cancelled = false;
     getSecurityStatusService().then((result) => {
-      if (!cancelled && result.success) setMfaEnabled(Boolean(result.data?.mfaEnabled));
+      if (cancelled || mfaUserIdRef.current !== userId) return;
+      if (result.success && typeof result.data?.mfaEnabled === 'boolean') setMfaEnabled(result.data.mfaEnabled);
+      else setMfaLoadError(true);
     });
     return () => { cancelled = true; };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, mfaReloadKey]);
 
   const startMfa = async () => {
+    if (mfaBusyRef.current || typeof mfaEnabled !== 'boolean') return;
+    mfaBusyRef.current = true;
+    const userId = currentUser?.id;
     setMfaBusy(true);
     setMfaMessage('');
-    const result = await startMfaChangeService(!mfaEnabled, mfaPassword);
-    setMfaBusy(false);
-    if (result.success) {
-      setMfaChallenge(result.data);
-      setMfaPassword('');
-      setMfaMessage(t('email_code_sent'));
-    } else setMfaMessage(result.message || t('security_mfa_error'));
+    try {
+      const result = await startMfaChangeService(!mfaEnabled, mfaPassword);
+      if (mfaUserIdRef.current !== userId) return;
+      if (result.success) {
+        setMfaChallenge(result.data);
+        setMfaPassword('');
+        setMfaMessage(t('email_code_sent'));
+      } else setMfaMessage(result.message || t('security_mfa_error'));
+    } finally {
+      if (mfaUserIdRef.current === userId) {
+        mfaBusyRef.current = false;
+        setMfaBusy(false);
+      }
+    }
   };
 
   const finishMfa = async () => {
+    if (mfaBusyRef.current || !mfaChallenge) return;
+    mfaBusyRef.current = true;
+    const userId = currentUser?.id;
+    const challenge = mfaChallenge;
     setMfaBusy(true);
-    const result = await finishMfaChangeService(mfaChallenge.challengeId, mfaCode, mfaChallenge.purpose);
-    setMfaBusy(false);
-    if (result.success) {
-      setMfaEnabled(Boolean(result.data.mfaEnabled));
-      setMfaChallenge(null);
-      setMfaCode('');
-      setMfaMessage(t('security_mfa_saved'));
-    } else setMfaMessage(result.message || t('email_code_invalid'));
+    try {
+      const result = await finishMfaChangeService(challenge.challengeId, mfaCode, challenge.purpose);
+      if (mfaUserIdRef.current !== userId) return;
+      if (result.success) {
+        setMfaEnabled(Boolean(result.data.mfaEnabled));
+        setMfaChallenge(null);
+        setMfaCode('');
+        setMfaMessage(t('security_mfa_saved'));
+      } else setMfaMessage(result.message || t('email_code_invalid'));
+    } finally {
+      if (mfaUserIdRef.current === userId) {
+        mfaBusyRef.current = false;
+        setMfaBusy(false);
+      }
+    }
   };
 
   const resendMfa = async () => {
-    const result = await resendCodeService(mfaChallenge.challengeId, mfaChallenge.purpose);
-    if (result.success) {
-      setMfaChallenge({ ...mfaChallenge, ...result.data });
-      setMfaCode('');
-      setMfaMessage(t('email_code_sent'));
-    } else setMfaMessage(result.message || t('email_code_wait'));
+    if (mfaBusyRef.current || !mfaChallenge) return;
+    mfaBusyRef.current = true;
+    const userId = currentUser?.id;
+    const challenge = mfaChallenge;
+    setMfaBusy(true);
+    try {
+      const result = await resendCodeService(challenge.challengeId, challenge.purpose);
+      if (mfaUserIdRef.current !== userId) return;
+      if (result.success) {
+        setMfaChallenge({ ...challenge, ...result.data });
+        setMfaCode('');
+        setMfaMessage(t('email_code_sent'));
+      } else setMfaMessage(result.message || t('email_code_wait'));
+    } finally {
+      if (mfaUserIdRef.current === userId) {
+        mfaBusyRef.current = false;
+        setMfaBusy(false);
+      }
+    }
   };
 
   // Hộp thoại xác nhận thu hồi một phiên
@@ -669,7 +719,8 @@ export default function SecuritySettings() {
           <p className="security-card-desc">{t('security_mfa_desc')}</p>
         </div></div>
         <div style={{ padding: '0 24px 24px' }}>
-          <p>{mfaEnabled === null ? t('security_mfa_loading') : mfaEnabled ? t('security_mfa_on') : t('security_mfa_off')}</p>
+          <p>{mfaEnabled === null ? mfaLoadError ? t('security_mfa_load_error') : t('security_mfa_loading') : mfaEnabled ? t('security_mfa_on') : t('security_mfa_off')}</p>
+          {mfaLoadError && <button type="button" className="btn btn-outline btn-sm" onClick={() => setMfaReloadKey((value) => value + 1)}>{t('security_btn_retry')}</button>}
           {mfaMessage && <p role="status">{mfaMessage}</p>}
           {mfaChallenge ? <div className="au-form-group">
             <label className="au-label" htmlFor="security-email-code">{t('email_code_label')}</label>

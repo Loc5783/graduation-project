@@ -201,6 +201,19 @@ describe('Giai đoạn 3B: Giao diện Quản lý Phiên Đăng nhập Thật (S
   // 1. KIỂM THỬ GIAO DIỆN CƠ BẢN (RENDER, METADATA NULL, RETRY, I18N, PREVIEW)
   // =========================================================================
   describe('1. Kiểm thử giao diện cơ bản & Khả năng tiếp cận', () => {
+    it('hiển thị lỗi xác thực hai bước và tải lại trạng thái khi thử lại', async () => {
+      vi.spyOn(authService, 'getSecurityStatusService')
+        .mockResolvedValueOnce({ success: false, status: 503 })
+        .mockResolvedValueOnce({ success: true, status: 200, data: { mfaEnabled: true } });
+
+      await renderApp();
+      expect(container.textContent).toContain('Không tải được trạng thái xác thực hai bước.');
+      const retry = [...container.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Thử lại');
+      expect(retry).toBeDefined();
+      await act(async () => { retry.click(); });
+      expect(container.textContent).toContain('Đang bật');
+    });
+
     it('hiển thị danh sách phiên, badge phiên hiện tại và fallback đúng khi createdAt hoặc deviceLabel là null', async () => {
       await renderApp();
 
