@@ -443,7 +443,8 @@ describe('Hoàn thiện Dashboard, Header VI/EN và Trạng thái Hub', () => {
 
       // Ở chế độ VI mặc định
       expect(container.querySelector('.overview-title').textContent).toBe('Tổng quan');
-      expect(container.querySelector('.empty-state-title').textContent).toBe('Chưa kết nối dữ liệu');
+      expect(container.querySelector('.live-device-panel')).not.toBeNull();
+      expect(container.querySelector('.live-panel-heading').textContent).toContain('Thiết bị trực tiếp');
       expect(container.textContent).not.toContain('Mỗi thành viên sẽ phụ trách phát triển tính năng chi tiết');
 
       // Nhấn chuyển sang EN
@@ -453,7 +454,8 @@ describe('Hoàn thiện Dashboard, Header VI/EN và Trạng thái Hub', () => {
       });
 
       expect(container.querySelector('.overview-title').textContent).toBe('Overview');
-      expect(container.querySelector('.empty-state-title').textContent).toBe('No data connected');
+      expect(container.querySelector('.live-device-panel')).not.toBeNull();
+      expect(container.querySelector('.live-panel-heading').textContent).toContain('Live devices');
     });
 
     it('DevicePage hiển thị khung thông tin kỹ thuật dạng thu gọn (collapsible details)', async () => {

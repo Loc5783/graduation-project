@@ -28,6 +28,17 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
   const bellBtnRef = useRef(null);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  // Keep the badge current while the dashboard is open. The shared context
+  // already guards overlapping and stale fetch responses.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshRef.current();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Đóng dropdown khi click bên ngoài
   useEffect(() => {

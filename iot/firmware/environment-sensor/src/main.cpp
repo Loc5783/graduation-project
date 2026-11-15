@@ -32,6 +32,49 @@ static float currentHumidity    = 60.0f;
 static GasAlertPacket espNowPacket;
 static esp_now_peer_info_t broadcastPeer;
 static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static bool espNowReady = false;
+static uint32_t lastEspNowAttempt = 0;
+static uint32_t lastEspNowSend = 0;
+
+void updateDisplayLink() {
+    const uint32_t now = millis();
+    // Do not let the display lock onto a temporary channel during Wi-Fi scans.
+    if (WiFi.status() != WL_CONNECTED) return;
+    if (!espNowReady) {
+        if (now - lastEspNowAttempt < 2000) return;
+        lastEspNowAttempt = now;
+        // The network task owns Wi-Fi startup and channel selection.
+        if (WiFi.getMode() != WIFI_STA) return;
+        esp_err_t error = esp_now_init();
+        if (error != ESP_OK) return;
+        memset(&broadcastPeer, 0, sizeof(broadcastPeer));
+        memcpy(broadcastPeer.peer_addr, BROADCAST_MAC, 6);
+        broadcastPeer.channel = 0;
+        broadcastPeer.ifidx = WIFI_IF_STA;
+        broadcastPeer.encrypt = false;
+        error = esp_now_add_peer(&broadcastPeer);
+        if (error != ESP_OK && error != ESP_ERR_ESPNOW_EXIST) {
+            esp_now_deinit();
+            return;
+        }
+        espNowReady = true;
+        Serial.println("[DISPLAY] ESP-NOW ready; broadcasting sensor readings.");
+    }
+    if (now - lastEspNowSend < 500) return;
+    lastEspNowSend = now;
+    espNowPacket.packet_id++;
+    espNowPacket.temperature = currentTemperature;
+    espNowPacket.humidity = currentHumidity;
+    espNowPacket.gas_raw = filteredGasAdc;
+    espNowPacket.alert_level = currentAlertLevel;
+    espNowPacket.uptime_ms = now;
+    esp_err_t error = esp_now_send(BROADCAST_MAC, (uint8_t *)&espNowPacket, sizeof(espNowPacket));
+    if (espNowPacket.packet_id % 10 == 0 || error != ESP_OK) {
+        Serial.printf("[DISPLAY] Packet %lu, channel %d, bytes %u, send=%s\n",
+                      (unsigned long)espNowPacket.packet_id, WiFi.channel(),
+                      (unsigned)sizeof(espNowPacket), esp_err_to_name(error));
+    }
+}
 #endif
 
 // ====================================================================
@@ -227,17 +270,6 @@ void setup() {
     // Khởi tạo FreeRTOS Network Task (Wi-Fi + MQTT)
     realtimeMqttBegin("env-esp32-v1.0");
 
-#if ENABLE_ESPNOW_BROADCAST
-    // Khởi tạo ESP-NOW broadcast nếu muốn hỗ trợ thêm màn hình TFT song song
-    if (esp_now_init() == ESP_OK) {
-        memset(&broadcastPeer, 0, sizeof(broadcastPeer));
-        memcpy(broadcastPeer.peer_addr, BROADCAST_MAC, 6);
-        broadcastPeer.channel = 0; // Dùng channel hiện tại của Wi-Fi
-        broadcastPeer.encrypt = false;
-        esp_now_add_peer(&broadcastPeer);
-        Serial.println("[ESPNOW] Da khoi tao ESP-NOW broadcast.");
-    }
-#endif
 
     Serial.printf("[WARMUP] Bat dau say cam bien MQ-2 trong %u giay...\n",
                   WARMUP_DURATION_MS / 1000);
@@ -261,6 +293,9 @@ void loop() {
 
     // 5. Đồng bộ snapshot dữ liệu sang Task Mạng MQTT
     syncSnapshotToNetwork();
+#if ENABLE_ESPNOW_BROADCAST
+    updateDisplayLink();
+#endif
 
     // 6. In debug ra Serial
     static unsigned long lastSerialPrint = 0;

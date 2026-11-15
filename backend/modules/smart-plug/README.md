@@ -18,10 +18,12 @@ backend/modules/smart-plug/
 
 | Phương thức | Đường dẫn API | Xác thực / Quyền | Chức năng |
 |---|---|---|---|
-| `GET` | `/api/devices/smart-plug/state` | Công khai | Lấy trạng thái tức thời (relay, công suất, điện năng, ánh sáng) |
-| `POST` | `/api/devices/smart-plug/relay` | `requireAuth` + Quyền `smart-plug` | Điều khiển Bật/Tắt Rơ-le (Bảo vệ CSRF + Allowlist) |
-| `POST` | `/api/devices/smart-plug/telemetry` | `Content-Type: JSON` | Nhận số đo chu kỳ từ phần cứng/worker, phát hiện quá tải |
-| `GET` | `/api/devices/smart-plug/history` | Công khai | Lấy lịch sử đo đạc phục vụ vẽ biểu đồ diễn biến điện năng |
+| `GET` | `/api/devices/smart-plug/state` | Đăng nhập + owner/viewer | Lấy trạng thái đang lưu |
+| `POST` | `/api/devices/smart-plug/relay` | Đăng nhập + owner + CSRF | Đổi trạng thái rơ-le phần mềm |
+| `POST` | `/api/devices/smart-plug/telemetry` | Đăng nhập + owner | Tạm khóa ghi: trả 503 cho owner vì chưa xác thực nguồn thiết bị |
+| `GET` | `/api/devices/smart-plug/history` | Đăng nhập + owner/viewer | Lấy lịch sử đang lưu |
+
+Nguồn HTTP chưa có danh tính thiết bị/worker được xác minh. Không dùng API này để ghi số đo cho đến khi có xác thực riêng cho thiết bị. Kênh MQTT công khai của Smart Plug vẫn có giới hạn bảo mật riêng.
 
 ## 3. Kiểm thử tự động (Vitest)
 
@@ -30,5 +32,5 @@ Bộ kiểm thử tích hợp đầy đủ các kịch bản tại [`backend/tes
 - Chặn người dùng chưa đăng nhập (401).
 - Chặn người dùng không có quyền quản lý thiết bị (403).
 - Cho phép tài khoản của **Nhật Anh** điều khiển rơ-le thành công (200).
-- Kiểm tra cơ chế tự động ngắt nguồn khi công suất vượt ngưỡng quá tải.
+- Kiểm tra nguồn HTTP chưa xác thực không thể ghi số đo hoặc kích hoạt quá tải.
 - Kiểm tra truy vấn danh sách lịch sử đo đạc.

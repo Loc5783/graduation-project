@@ -1,18 +1,10 @@
 import bcrypt from 'bcryptjs';
-import { emailAuthEnabled } from '../services/emailAuth.js';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const VALID_ROLES = ['admin', 'member', 'viewer'];
-const KNOWN_DEVICE_IDS = [
-  'smart-door-lock',
-  'smart-speaker',
-  'window-sensor',
-  'smart-plug',
-  'environment-sensor'
-];
 
 /**
  * Lấy danh sách tất cả người dùng trong hệ thống (GET /api/admin/users)
@@ -29,7 +21,7 @@ export async function listUsers(req, res, next) {
       name: u.name,
       email: u.email,
       role: u.role || 'viewer',
-      owned: Array.isArray(u.owned) ? u.owned : [],
+      isLocked: u.isLocked === true,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt
     }));
@@ -49,7 +41,7 @@ export async function listUsers(req, res, next) {
 export async function updateUserRole(req, res, next) {
   try {
     const { userId } = req.params;
-    const { role, owned } = req.body || {};
+    const { role } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
@@ -92,17 +84,6 @@ export async function updateUserRole(req, res, next) {
     const oldRole = targetUser.role;
     targetUser.role = role;
 
-    // Chuẩn hóa mảng thiết bị phụ trách
-    if (role === 'admin') {
-      targetUser.owned = []; // Admin có toàn quyền tự động
-    } else if (role === 'member') {
-      targetUser.owned = Array.isArray(owned)
-        ? owned.filter((d) => typeof d === 'string' && KNOWN_DEVICE_IDS.includes(d))
-        : [];
-    } else {
-      targetUser.owned = []; // Viewer không phụ trách thiết bị nào
-    }
-
     await targetUser.save();
 
     // Ghi lại nhật ký kiểm toán (Audit Log)
@@ -114,7 +95,7 @@ export async function updateUserRole(req, res, next) {
         actor: req.user.email || req.user.name || 'Admin',
         actorId: req.user._id,
         target: targetUser.email,
-        details: `Đã đổi vai trò của ${targetUser.name} (${targetUser.email}) từ "${oldRole}" thành "${role}". Thiết bị phụ trách: [${targetUser.owned.join(', ')}].`,
+        details: `Đã đổi vai trò của ${targetUser.name} (${targetUser.email}) từ "${oldRole}" thành "${role}".`,
         ip: req.ip || req.headers['x-forwarded-for'] || '127.0.0.1',
         userAgent: req.headers['user-agent'] || ''
       });
@@ -124,13 +105,12 @@ export async function updateUserRole(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: 'Cập nhật vai trò và phân quyền thành công.',
+      message: 'Cập nhật vai trò thành công.',
       data: {
         id: targetUser._id.toString(),
         name: targetUser.name,
         email: targetUser.email,
-        role: targetUser.role,
-        owned: targetUser.owned
+        role: targetUser.role
       }
     });
   } catch (error) {
@@ -138,12 +118,39 @@ export async function updateUserRole(req, res, next) {
   }
 }
 
+export async function setUserLock(req, res, next) {
+  try {
+    const { userId } = req.params;
+    const locked = req.body?.locked;
+    if (!mongoose.Types.ObjectId.isValid(userId) || typeof locked !== 'boolean' || Object.keys(req.body || {}).length !== 1) {
+      return res.status(400).json({ success: false, code: 'INVALID_REQUEST' });
+    }
+    if (req.user._id.toString() === userId) return res.status(400).json({ success: false, code: 'CANNOT_LOCK_SELF' });
+    const target = await User.findById(userId);
+    if (!target) return res.status(404).json({ success: false, code: 'USER_NOT_FOUND' });
+    if (target.role === 'admin' && locked) {
+      const adminCount = await User.countDocuments({ role: 'admin', isLocked: { $ne: true } });
+      if (adminCount <= 1) return res.status(400).json({ success: false, code: 'CANNOT_LOCK_SOLE_ADMIN' });
+    }
+    target.isLocked = locked;
+    if (locked) target.authVersion = (target.authVersion || 0) + 1;
+    await target.save();
+    try {
+      await AuditLog.create({ action: locked ? 'USER_LOCKED' : 'USER_UNLOCKED', category: 'role', severity: 'warning',
+        actor: req.user.email, actorId: req.user._id, target: target.email,
+        details: locked ? 'Quản trị viên đã khóa tài khoản.' : 'Quản trị viên đã mở khóa tài khoản.',
+        ip: req.ip || '127.0.0.1', userAgent: req.headers['user-agent'] || '' });
+    } catch { /* Account lock remains authoritative even if audit storage fails. */ }
+    return res.status(200).json({ success: true, data: { id: userId, isLocked: target.isLocked } });
+  } catch (error) { return next(error); }
+}
+
 /**
  * Tạo người dùng mới từ khu vực quản trị (POST /api/admin/users)
  */
 export async function createUser(req, res, next) {
   try {
-    const { name, email, password, role = 'viewer', owned = [] } = req.body || {};
+    const { name, email, password, role = 'viewer' } = req.body || {};
 
     const errors = {};
 
@@ -194,17 +201,12 @@ export async function createUser(req, res, next) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const validOwned = role === 'member' && Array.isArray(owned)
-      ? owned.filter((d) => typeof d === 'string' && KNOWN_DEVICE_IDS.includes(d))
-      : [];
-
     const newUser = await User.create({
       name: name.trim(),
       email: cleanEmail,
       passwordHash,
       role,
-      owned: validOwned,
-      mfaEnabled: emailAuthEnabled()
+      owned: []
     });
 
     try {
@@ -229,7 +231,6 @@ export async function createUser(req, res, next) {
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
-        owned: newUser.owned,
         createdAt: newUser.createdAt
       }
     });
@@ -309,120 +310,7 @@ export async function deleteUser(req, res, next) {
 }
 
 /**
- * Lấy báo cáo trạng thái hệ thống toàn diện (GET /api/admin/system-status)
- */
-export async function getSystemStatus(req, res, next) {
-  try {
-    const memory = process.memoryUsage();
-    const isDbConnected = mongoose.connection.readyState === 1;
-
-    let userCount = 0;
-    let sessionCount = 0;
-    let logCount = 0;
-    let notificationCount = 0;
-
-    if (isDbConnected) {
-      userCount = await User.countDocuments().catch(() => 0);
-      logCount = await AuditLog.countDocuments().catch(() => 0);
-      try {
-        sessionCount = await mongoose.connection.collection('sessions').countDocuments();
-      } catch {
-        sessionCount = 0;
-      }
-      try {
-        notificationCount = await mongoose.connection.collection('notifications').countDocuments();
-      } catch {
-        notificationCount = 0;
-      }
-    }
-
-    const envTelemetry = req.app.locals?.environmentSensorTelemetry;
-    const isEnvOnline = Boolean(envTelemetry?.brokerConnected && envTelemetry?.availability === 'online');
-
-    const devices = [
-      {
-        id: 'environment-sensor',
-        name: 'Cảm biến môi trường & Gas',
-        owner: 'Quỳnh',
-        online: isEnvOnline,
-        status: isEnvOnline ? 'Hoạt động tốt' : 'Mô phỏng / Ngoại tuyến',
-        lastSeen: envTelemetry?.receivedAt || new Date().toISOString()
-      },
-      {
-        id: 'smart-door-lock',
-        name: 'Khóa cửa thông minh',
-        owner: 'Thành',
-        online: true,
-        status: 'Khóa an toàn (Pin 92%)',
-        lastSeen: new Date().toISOString()
-      },
-      {
-        id: 'smart-speaker',
-        name: 'Loa thông minh',
-        owner: 'Lộc',
-        online: true,
-        status: 'Sẵn sàng (Âm lượng 65%)',
-        lastSeen: new Date().toISOString()
-      },
-      {
-        id: 'window-sensor',
-        name: 'Cảm biến cửa sổ',
-        owner: 'Minh',
-        online: true,
-        status: 'Cửa đang đóng',
-        lastSeen: new Date().toISOString()
-      },
-      {
-        id: 'smart-plug',
-        name: 'Ổ cắm thông minh',
-        owner: 'Nhật Anh',
-        online: true,
-        status: 'Bật (Công suất 45W)',
-        lastSeen: new Date().toISOString()
-      }
-    ];
-
-    const onlineDevicesCount = devices.filter((d) => d.online).length;
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        server: {
-          uptimeSeconds: Math.floor(process.uptime()),
-          nodeVersion: process.version,
-          platform: process.platform,
-          memoryMb: Math.round(memory.rss / (1024 * 1024)),
-          heapUsedMb: Math.round(memory.heapUsed / (1024 * 1024)),
-          port: Number(process.env.PORT || 5000)
-        },
-        database: {
-          connected: isDbConnected,
-          name: mongoose.connection.name || 'smart_home_privacy',
-          userCount,
-          sessionCount,
-          logCount,
-          notificationCount
-        },
-        mqtt: {
-          url: process.env.MQTT_URL || 'mqtt://broker.emqx.io:1883',
-          connected: Boolean(envTelemetry?.brokerConnected ?? true),
-          protocol: 'TCP / WebSocket'
-        },
-        devices: {
-          total: devices.length,
-          onlineCount: onlineDevicesCount,
-          list: devices
-        },
-        checkedAt: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Lấy danh sách nhật ký kiểm toán với bộ lọc (GET /api/admin/audit-logs)
+ * Lấy nhật ký quản trị thực tế; không tạo sự kiện mẫu khi danh sách trống.
  */
 export async function listAuditLogs(req, res, next) {
   try {
@@ -436,6 +324,19 @@ export async function listAuditLogs(req, res, next) {
       limit = 20
     } = req.query;
 
+    const allowed = new Set(['category', 'severity', 'actor', 'search', 'timeRange', 'page', 'limit']);
+    if (Object.keys(req.query).some((key) => !allowed.has(key)) ||
+        [category, severity, actor, search, timeRange, page, limit].some((value) => value != null && typeof value !== 'string' && typeof value !== 'number') ||
+        (search && search.length > 80) || (actor && actor.length > 150) ||
+        (timeRange && !['today', '7days', '30days'].includes(timeRange)) ||
+        (category && !['all', 'auth', 'role', 'device', 'privacy', 'system'].includes(category)) ||
+        (severity && !['all', 'info', 'warning', 'danger'].includes(severity)) ||
+        !/^\d+$/.test(String(page)) || !/^\d+$/.test(String(limit))) {
+      return res.status(400).json({ success: false, code: 'INVALID_QUERY' });
+    }
+
+    const escapeRegex = (value) => value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+
     const query = {};
 
     if (category && category !== 'all') {
@@ -447,11 +348,11 @@ export async function listAuditLogs(req, res, next) {
     }
 
     if (actor && actor !== 'all') {
-      query.actor = new RegExp(`^${actor}$`, 'i');
+      query.actor = new RegExp(`^${escapeRegex(actor)}$`, 'i');
     }
 
     if (search && typeof search === 'string' && search.trim()) {
-      const cleanSearch = search.trim();
+      const cleanSearch = escapeRegex(search.trim());
       query.$or = [
         { details: new RegExp(cleanSearch, 'i') },
         { action: new RegExp(cleanSearch, 'i') },
@@ -479,6 +380,7 @@ export async function listAuditLogs(req, res, next) {
     const skip = (pageNum - 1) * limitNum;
 
     const isDbConnected = mongoose.connection.readyState === 1;
+    if (!isDbConnected) return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE' });
     let logs = [];
     let total = 0;
 
@@ -491,68 +393,6 @@ export async function listAuditLogs(req, res, next) {
           .lean(),
         AuditLog.countDocuments(query)
       ]);
-    }
-
-    // Nếu cơ sở dữ liệu trống hoặc chưa có bản ghi, cung cấp dữ liệu mẫu phong phú
-    if (logs.length === 0 && !search && (!category || category === 'all') && pageNum === 1) {
-      logs = [
-        {
-          id: 'log-1',
-          action: 'LOGIN_SUCCESS',
-          category: 'auth',
-          severity: 'info',
-          actor: 'admin',
-          target: 'Hệ thống Web',
-          details: 'Đăng nhập thành công từ trình duyệt Chrome Desktop (127.0.0.1)',
-          ip: '127.0.0.1',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'log-2',
-          action: 'USER_ROLE_UPDATED',
-          category: 'role',
-          severity: 'info',
-          actor: 'admin',
-          target: 'quynh@gmail.com',
-          details: 'Cập nhật quyền phụ trách thiết bị [environment-sensor] cho Đỗ Thúy Quỳnh',
-          ip: '127.0.0.1',
-          createdAt: new Date(Date.now() - 3600000).toISOString()
-        },
-        {
-          id: 'log-3',
-          action: 'DEVICE_ALERT',
-          category: 'device',
-          severity: 'warning',
-          actor: 'environment-sensor',
-          target: 'Nhà bếp',
-          details: 'Cảm biến MQ-2 ghi nhận nồng độ Gas vượt ngưỡng 1205 ADC',
-          ip: '172.21.203.9',
-          createdAt: new Date(Date.now() - 7200000).toISOString()
-        },
-        {
-          id: 'log-4',
-          action: 'EXPORT_DATA_PDF',
-          category: 'privacy',
-          severity: 'info',
-          actor: 'admin',
-          target: 'Báo cáo cá nhân',
-          details: 'Xuất file PDF hồ sơ và sự kiện thiết bị',
-          ip: '127.0.0.1',
-          createdAt: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: 'log-5',
-          action: 'SESSION_REVOKED',
-          category: 'auth',
-          severity: 'info',
-          actor: 'admin',
-          target: 'Phiên Edge Windows',
-          details: 'Thu hồi phiên làm việc từ xa',
-          ip: '127.0.0.1',
-          createdAt: new Date(Date.now() - 172800000).toISOString()
-        }
-      ];
-      total = logs.length;
     }
 
     return res.status(200).json({

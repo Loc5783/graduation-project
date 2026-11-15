@@ -1,9 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import mongoose from 'mongoose';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
-import { emailAuthEnabled, issueEmailChallenge, consumeEmailChallenge, resendEmailChallenge } from '../services/emailAuth.js';
 import parseUserAgent from '../utils/userAgentParser.js';
 
 // Hash mẫu định dạng bcrypt hợp lệ dùng để ngăn chặn tấn công Timing Attack khi không tìm thấy user
@@ -69,11 +67,6 @@ export async function register(req, res, next) {
     // Kiểm tra trùng lặp email trước khi băm để trả lời nhanh
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
-      if (emailAuthEnabled() && existing.emailVerificationRequired && !existing.emailVerifiedAt && await bcrypt.compare(password, existing.passwordHash)) {
-        const challenge = await issueEmailChallenge(existing, 'register');
-        if (challenge.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN', message: 'Vui lòng chờ 60 giây trước khi yêu cầu mã mới.' });
-        return res.status(202).json({ success: true, code: 'EMAIL_VERIFICATION_REQUIRED', data: challenge });
-      }
       return res.status(409).json({
         success: false,
         code: 'DUPLICATE_KEY',
@@ -94,21 +87,8 @@ export async function register(req, res, next) {
       email: normalizedEmail,
       passwordHash,
       role: 'viewer',
-      owned: [],
-      emailVerifiedAt: emailAuthEnabled() ? null : new Date(),
-      emailVerificationRequired: emailAuthEnabled(),
-      mfaEnabled: emailAuthEnabled()
+      owned: []
     });
-
-    if (emailAuthEnabled()) {
-      try {
-        const challenge = await issueEmailChallenge(newUser, 'register');
-        return res.status(202).json({ success: true, code: 'EMAIL_VERIFICATION_REQUIRED', data: challenge });
-      } catch (mailError) {
-        await User.deleteOne({ _id: newUser._id, emailVerificationRequired: true, emailVerifiedAt: null });
-        throw mailError;
-      }
-    }
 
     // Trả về 201 Created (không kèm passwordHash, không tạo session)
     return res.status(201).json({
@@ -130,48 +110,79 @@ export async function register(req, res, next) {
   }
 }
 
-export async function verifyRegistration(req, res, next) {
+/**
+ * Xử lý đăng nhập tài khoản (POST /api/auth/login)
+ * - Chống Timing Attack bằng dummy hash nếu email không tồn tại
+ * - Sai email hoặc mật khẩu đều trả về cùng một thông báo chung
+ * - Regenerate session để chống Session Fixation
+ * - Lưu session trong MongoDB trước khi phản hồi 200
+ */
+export async function login(req, res, next) {
   try {
-    const challenge = await consumeEmailChallenge(req.body?.challengeId, req.body?.code, 'register');
-    if (!challenge) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
-    const user = await User.findOneAndUpdate(
-      { _id: challenge.userId, emailVerificationRequired: true, emailVerifiedAt: null },
-      { $set: { emailVerifiedAt: new Date(), emailVerificationRequired: false } }, { returnDocument: 'after' }
-    );
-    if (!user) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
-    return res.status(200).json({ success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, owned: user.owned } } });
-  } catch (error) { next(error); }
-}
+    const { email, password, remember } = req.body || {};
 
-export async function verifyLogin(req, res, next) {
-  try {
-    const challenge = await consumeEmailChallenge(req.body?.challengeId, req.body?.code, 'login');
-    if (!challenge) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
-    const user = await User.findById(challenge.userId);
-    if (!user || user.emailVerificationRequired || (user.authVersion || 0) !== challenge.authVersion) return res.status(401).json({ success: false, code: 'UNAUTHORIZED', message: 'Tài khoản không còn hợp lệ.' });
-    if (!user.emailVerifiedAt || !user.mfaEnabled) await User.updateOne({ _id: user._id }, { $set: { emailVerifiedAt: new Date(), mfaEnabled: true } });
-    req.verifiedLogin = { user };
-    req.body = { remember: challenge.remember };
-    return login(req, res, next);
-  } catch (error) { next(error); }
-}
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+      return res.status(400).json({
+        success: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Email và mật khẩu là bắt buộc.'
+      });
+    }
 
-export async function resendCode(req, res, next) {
-  try {
-    const purpose = req.body?.purpose;
-    if (!['register', 'login'].includes(purpose)) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR' });
-    const result = await resendEmailChallenge(req.body?.challengeId, purpose);
-    if (!result) return res.status(400).json({ success: false, code: 'INVALID_CODE', message: 'Yêu cầu mã đã hết hạn.' });
-    if (result.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN', message: 'Vui lòng chờ 60 giây trước khi gửi lại.' });
-    return res.json({ success: true, data: result });
-  } catch (error) { next(error); }
-}
+    // 1. Kiểm tra kiểu của remember: mặc định false nếu thiếu; nếu có bắt buộc là boolean
+    let isRemember = false;
+    if (remember !== undefined) {
+      if (typeof remember !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          code: 'VALIDATION_ERROR',
+          message: 'Trường remember phải là giá trị boolean (true hoặc false).',
+          errors: {
+            remember: 'Giá trị remember không đúng định dạng boolean.'
+          }
+        });
+      }
+      isRemember = remember;
+    }
 
-export async function securityStatus(req, res) {
-  return res.json({ success: true, data: { mfaEnabled: emailAuthEnabled(), mfaRequired: emailAuthEnabled(), idleTimeoutMinutes: 15 } });
-}
+    const normalizedEmail = email.trim().toLowerCase();
 
-function completeLogin(req, res, next, user, remember) {
+    // Nếu mật khẩu vượt quá 72 byte, chắc chắn không thể khớp (bcrypt chỉ băm tối đa 72 byte)
+    // Nhưng vẫn chạy dummy compare để giữ timing nhất quán
+    const byteLength = Buffer.byteLength(password, 'utf8');
+    if (byteLength > 72) {
+      await bcrypt.compare(password, DUMMY_HASH);
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Email hoặc mật khẩu không chính xác.'
+      });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      // Dummy compare để chống timing attack dò tìm email
+      await bcrypt.compare(password, DUMMY_HASH);
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Email hoặc mật khẩu không chính xác.'
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Email hoặc mật khẩu không chính xác.'
+      });
+    }
+
+    if (user.isLocked === true) {
+      return res.status(403).json({ success: false, code: 'ACCOUNT_LOCKED', message: 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.' });
+    }
+
     // Tái tạo session ID mới (Regenerate session) để ngăn chặn Session Fixation
     req.session.regenerate(async (err) => {
       if (err) {
@@ -180,11 +191,9 @@ function completeLogin(req, res, next, user, remember) {
 
       req.session.userId = user._id.toString();
       req.session.authVersion = typeof user.authVersion === 'number' ? user.authVersion : 0;
-      if (emailAuthEnabled()) req.session.emailSecondFactorVerifiedAt = Date.now();
-      req.session.lastUserActivityAt = Date.now();
 
       // Cấu hình thời hạn phiên: 14 ngày nếu ghi nhớ, mặc định 1 ngày
-      const maxAge = remember ? 14 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      const maxAge = isRemember ? 14 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
       req.session.cookie.maxAge = maxAge;
 
       // Sinh mã quản lý phiên công khai (Public Session ID)
@@ -255,121 +264,6 @@ function completeLogin(req, res, next, user, remember) {
         });
       });
     });
-}
-
-/**
- * Xử lý đăng nhập tài khoản (POST /api/auth/login)
- * - Chống Timing Attack bằng dummy hash nếu email không tồn tại
- * - Sai email hoặc mật khẩu đều trả về cùng một thông báo chung
- * - Regenerate session để chống Session Fixation
- * - Lưu session trong MongoDB trước khi phản hồi 200
- */
-export async function login(req, res, next) {
-  try {
-    const { email, password, remember } = req.body || {};
-
-    if (!req.verifiedLogin && (!email || typeof email !== 'string' || !password || typeof password !== 'string')) {
-      return res.status(400).json({
-        success: false,
-        code: 'VALIDATION_ERROR',
-        message: 'Email và mật khẩu là bắt buộc.'
-      });
-    }
-
-    // 1. Kiểm tra kiểu của remember: mặc định false nếu thiếu; nếu có bắt buộc là boolean
-    let isRemember = false;
-    if (remember !== undefined) {
-      if (typeof remember !== 'boolean') {
-        return res.status(400).json({
-          success: false,
-          code: 'VALIDATION_ERROR',
-          message: 'Trường remember phải là giá trị boolean (true hoặc false).',
-          errors: {
-            remember: 'Giá trị remember không đúng định dạng boolean.'
-          }
-        });
-      }
-      isRemember = remember;
-    }
-
-    const normalizedEmail = req.verifiedLogin ? '' : email.trim().toLowerCase();
-
-    // Hỗ trợ chế độ offline (khi MongoDB không chạy trên máy phát triển)
-    if (!req.verifiedLogin && !emailAuthEnabled() && mongoose.connection.readyState !== 1) {
-      const demoAccounts = [
-        { id: 'usr_admin', name: 'Quản trị viên hệ thống', email: 'admin@smarthome.local', role: 'admin', owned: [] },
-        { id: 'usr_quynh', name: 'Đỗ Thúy Quỳnh', email: 'quynh@smarthome.local', role: 'member', owned: ['environment-sensor'] },
-        { id: 'usr_nhatanh', name: 'Phạm Nhật Anh', email: 'nhatanh@smarthome.local', role: 'member', owned: ['smart-plug'] },
-        { id: 'usr_thanh', name: 'Nguyễn Văn Thành', email: 'thanh@smarthome.local', role: 'member', owned: ['smart-door-lock'] },
-        { id: 'usr_viewer', name: 'Khách xem (Viewer)', email: 'viewer@smarthome.local', role: 'viewer', owned: [] }
-      ];
-
-      const found = demoAccounts.find(
-        (acc) => acc.email === normalizedEmail || acc.email.split('@')[0] === normalizedEmail
-      );
-
-      if (found) {
-        const mockUser = {
-          _id: found.id,
-          id: found.id,
-          name: found.name,
-          email: found.email,
-          role: found.role,
-          owned: found.owned,
-          authVersion: 1,
-          createdAt: new Date().toISOString()
-        };
-        req.session.userId = found.id;
-        req.session.mockUser = mockUser;
-        return res.status(200).json({
-          success: true,
-          data: { user: mockUser }
-        });
-      }
-    }
-
-    // Nếu mật khẩu vượt quá 72 byte, chắc chắn không thể khớp (bcrypt chỉ băm tối đa 72 byte)
-    // Nhưng vẫn chạy dummy compare để giữ timing nhất quán
-    const byteLength = req.verifiedLogin ? 0 : Buffer.byteLength(password, 'utf8');
-    if (byteLength > 72) {
-      await bcrypt.compare(password, DUMMY_HASH);
-      return res.status(401).json({
-        success: false,
-        code: 'INVALID_CREDENTIALS',
-        message: 'Email hoặc mật khẩu không chính xác.'
-      });
-    }
-
-    const user = req.verifiedLogin?.user || await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      // Dummy compare để chống timing attack dò tìm email
-      await bcrypt.compare(password, DUMMY_HASH);
-      return res.status(401).json({
-        success: false,
-        code: 'INVALID_CREDENTIALS',
-        message: 'Email hoặc mật khẩu không chính xác.'
-      });
-    }
-
-    const isMatch = req.verifiedLogin ? true : await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        code: 'INVALID_CREDENTIALS',
-        message: 'Email hoặc mật khẩu không chính xác.'
-      });
-    }
-
-    if (emailAuthEnabled() && user.emailVerificationRequired && !user.emailVerifiedAt) {
-      return res.status(403).json({ success: false, code: 'EMAIL_NOT_VERIFIED', message: 'Vui lòng xác minh email trước khi đăng nhập.' });
-    }
-    if (emailAuthEnabled() && !req.verifiedLogin) {
-      const challenge = await issueEmailChallenge(user, 'login', isRemember);
-      if (challenge.rateLimited) return res.status(429).json({ success: false, code: 'CODE_COOLDOWN', message: 'Vui lòng chờ 60 giây trước khi yêu cầu mã mới.' });
-      return res.status(202).json({ success: true, code: 'LOGIN_CODE_REQUIRED', data: challenge });
-    }
-
-    return completeLogin(req, res, next, user, isRemember);
   } catch (error) {
     next(error);
   }
@@ -380,17 +274,16 @@ export async function login(req, res, next) {
  * Được bảo vệ bởi requireAuth middleware
  */
 export async function me(req, res) {
-  const userId = req.user._id ? req.user._id.toString() : (req.user.id || 'usr_unknown');
   return res.status(200).json({
     success: true,
     data: {
       user: {
-        id: userId,
+        id: req.user._id.toString(),
         name: req.user.name,
         email: req.user.email,
         role: req.user.role,
-        owned: req.user.owned || [],
-        createdAt: req.user.createdAt || new Date().toISOString()
+        owned: req.user.owned,
+        createdAt: req.user.createdAt
       }
     }
   });

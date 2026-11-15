@@ -1,0 +1,240 @@
+.device-share-manager {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.share-manager-header {
+  margin-bottom: 1rem;
+}
+
+.share-manager-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  color: var(--text-primary, #0f172a);
+}
+
+.share-manager-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #64748b);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.share-alert {
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-alert-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.share-alert-success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.share-add-form {
+  margin-bottom: 1.25rem;
+}
+
+.share-input-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.share-email-input {
+  flex: 1;
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--bg-input, #ffffff);
+  color: var(--text-primary, #0f172a);
+  font-size: 0.9rem;
+}
+
+.share-email-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.share-btn-submit {
+  white-space: nowrap;
+}
+
+.share-list-container {
+  border-top: 1px solid var(--border-color, #f1f5f9);
+  padding-top: 1rem;
+}
+
+.share-list-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+  color: var(--text-primary, #1e293b);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-count-badge {
+  background: var(--bg-badge, #e2e8f0);
+  color: var(--text-secondary, #475569);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 12px;
+}
+
+.share-loading-text,
+.share-empty-text {
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+.share-user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.share-user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-surface-subtle, #f8fafc);
+  border: 1px solid var(--border-color, #f1f5f9);
+  border-radius: 8px;
+}
+
+.share-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.share-user-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary, #1e293b);
+}
+
+.share-user-email {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+}
+
+.revoke-confirm-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.revoke-confirm-label {
+  font-size: 0.8rem;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.btn-revoke {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.btn-revoke:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+/* Subcards: Tên gợi nhớ & Khu vực gỡ thiết bị */
+.device-settings-subcard {
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.device-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem 0;
+  color: var(--text-primary, #0f172a);
+}
+
+.device-section-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #64748b);
+  margin: 0 0 0.85rem 0;
+  line-height: 1.4;
+}
+
+.device-name-form .name-input-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.device-name-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--bg-input, #ffffff);
+  color: var(--text-primary, #0f172a);
+  font-size: 0.9rem;
+}
+
+.device-name-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Danger Zone */
+.unclaim-subcard {
+  border-top: 1px solid #fee2e2;
+  background: var(--bg-surface-subtle, transparent);
+  border-radius: 8px;
+}
+
+.danger-title {
+  color: #b91c1c;
+}
+
+.unclaim-confirm-card {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.75rem;
+}
+
+.unclaim-confirm-warning {
+  color: #991b1b;
+  font-size: 0.875rem;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+}
+
+.unclaim-confirm-actions {
+  display: flex;
+  gap: 0.6rem;
+}

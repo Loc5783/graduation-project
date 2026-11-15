@@ -1,16 +1,19 @@
 import SmartPlugTelemetry from './smartPlugModel.js';
+import { getDeviceAccess } from '../../src/services/deviceAccess.js';
 
 // Trạng thái bộ nhớ đệm tức thời (In-memory cache) cho thiết bị Smart Plug
 const currentDeviceState = {
   deviceId: 'smart-plug',
   relayState: 'OFF',
-  voltage: 220.4,
-  powerWatt: 0,
-  energyKwh: 0.042,
-  lightLux: 320,
+  voltage: null,
+  powerWatt: null,
+  energyKwh: null,
+  lightLux: null,
   isOverloaded: false,
   overloadThreshold: 2000,
-  lastUpdated: new Date()
+  verifiedHardware: false,
+  isUntrusted: true,
+  lastUpdated: null
 };
 
 /**
@@ -19,6 +22,15 @@ const currentDeviceState = {
  */
 export async function getState(req, res, next) {
   try {
+    const { canView } = await getDeviceAccess(req.user?._id, 'smart-plug');
+    if (!canView) {
+      return res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        message: 'Bạn không có quyền xem dữ liệu ổ cắm thông minh.'
+      });
+    }
+
     const latest = await SmartPlugTelemetry.findOne({ deviceId: 'smart-plug' })
       .sort({ createdAt: -1 })
       .lean();
@@ -33,6 +45,8 @@ export async function getState(req, res, next) {
           lightLux: latest.lightLux,
           isOverloaded: latest.isOverloaded,
           overloadThreshold: latest.overloadThreshold,
+          verifiedHardware: Boolean(latest.verifiedHardware),
+          isUntrusted: Boolean(latest.isUntrusted),
           lastUpdated: latest.createdAt
         }
       : currentDeviceState;
@@ -68,14 +82,12 @@ export async function toggleRelay(req, res, next) {
     }
 
     // Kiểm tra quyền hạn của tài khoản
-    const user = req.user;
-    const canControl = user && (user.role === 'admin' || (user.role === 'member' && Array.isArray(user.owned) && user.owned.includes('smart-plug')));
-
+    const { device, canControl } = await getDeviceAccess(req.user?._id, 'smart-plug');
     if (!canControl) {
       return res.status(403).json({
         success: false,
         code: 'FORBIDDEN',
-        message: 'Bạn không có quyền điều khiển thiết bị này. Chỉ Nhật Anh hoặc Quản trị viên mới được thao tác.'
+        message: 'Bạn không có quyền điều khiển thiết bị này. Chỉ chủ sở hữu mới được thao tác.'
       });
     }
 
@@ -96,11 +108,12 @@ export async function toggleRelay(req, res, next) {
       deviceId: 'smart-plug',
       relayState: state,
       voltage: latest ? latest.voltage : currentDeviceState.voltage,
-      powerWatt: state === 'ON' ? 50.0 : 0,
+      powerWatt: latest ? latest.powerWatt : null,
       energyKwh: latest ? latest.energyKwh : currentDeviceState.energyKwh,
       lightLux: latest ? latest.lightLux : currentDeviceState.lightLux,
       isOverloaded: false,
-      overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold
+      overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold,
+      ownershipEpoch: device?.ownershipEpoch ?? null
     };
 
     const record = await SmartPlugTelemetry.create(recordData);
@@ -122,73 +135,17 @@ export async function toggleRelay(req, res, next) {
   }
 }
 
-/**
- * Tiếp nhận bản tin Telemetry từ thiết bị phần cứng (ESP32) hoặc worker
- * POST /api/devices/smart-plug/telemetry
- */
+/** HTTP telemetry has no device identity yet. Keep this endpoint closed to writes. */
 export async function postTelemetry(req, res, next) {
   try {
-    const { relayState, voltage, powerWatt, energyKwh, lightLux } = req.body || {};
-
-    if (typeof powerWatt !== 'number' || typeof voltage !== 'number' || Number.isNaN(powerWatt) || Number.isNaN(voltage)) {
-      return res.status(400).json({
-        success: false,
-        code: 'VALIDATION_ERROR',
-        message: 'Dữ liệu đo đạc (voltage, powerWatt) phải là số.'
-      });
+    const { canControl } = await getDeviceAccess(req.user?._id, 'smart-plug');
+    if (!canControl) {
+      return res.status(403).json({ success: false, code: 'FORBIDDEN' });
     }
-
-    if (relayState !== undefined && relayState !== 'ON' && relayState !== 'OFF') {
-      return res.status(400).json({
-        success: false,
-        code: 'VALIDATION_ERROR',
-        message: 'Trạng thái rơ-le phải là "ON" hoặc "OFF".'
-      });
-    }
-
-    const latest = await SmartPlugTelemetry.findOne({ deviceId: 'smart-plug' })
-      .sort({ createdAt: -1 })
-      .lean();
-    const threshold = latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold;
-
-    let effectiveRelayState = relayState || (latest ? latest.relayState : currentDeviceState.relayState);
-    let effectivePowerWatt = powerWatt;
-    let isOverloaded = false;
-
-    // Tự động ngắt khi quá tải, hoặc tự động giải phóng khi công suất trở về mức an toàn
-    if (powerWatt > threshold) {
-      isOverloaded = true;
-      effectiveRelayState = 'OFF';
-      effectivePowerWatt = 0;
-    } else {
-      isOverloaded = false;
-    }
-
-    const recordData = {
-      deviceId: 'smart-plug',
-      relayState: effectiveRelayState,
-      voltage,
-      powerWatt: effectivePowerWatt,
-      energyKwh: typeof energyKwh === 'number' ? energyKwh : (latest ? latest.energyKwh : currentDeviceState.energyKwh),
-      lightLux: typeof lightLux === 'number' ? lightLux : (latest ? latest.lightLux : currentDeviceState.lightLux),
-      isOverloaded,
-      overloadThreshold: threshold
-    };
-
-    // Lưu vào database trước khi cập nhật bộ nhớ
-    const record = await SmartPlugTelemetry.create(recordData);
-
-    Object.assign(currentDeviceState, {
-      ...recordData,
-      lastUpdated: record.createdAt
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: 'Đã lưu bản tin telemetry thành công.',
-      data: {
-        telemetry: record
-      }
+    return res.status(503).json({
+      success: false,
+      code: 'TELEMETRY_SOURCE_NOT_CONFIGURED',
+      message: 'Chưa cấu hình xác thực nguồn telemetry HTTP cho thiết bị.'
     });
   } catch (err) {
     next(err);
@@ -201,14 +158,12 @@ export async function postTelemetry(req, res, next) {
  */
 export async function resetOverload(req, res, next) {
   try {
-    const user = req.user;
-    const canControl = user && (user.role === 'admin' || (user.role === 'member' && Array.isArray(user.owned) && user.owned.includes('smart-plug')));
-
+    const { device, canControl } = await getDeviceAccess(req.user?._id, 'smart-plug');
     if (!canControl) {
       return res.status(403).json({
         success: false,
         code: 'FORBIDDEN',
-        message: 'Bạn không có quyền thao tác trên thiết bị này.'
+        message: 'Bạn không có quyền thao tác trên thiết bị này. Chỉ chủ sở hữu mới được thao tác.'
       });
     }
 
@@ -220,11 +175,12 @@ export async function resetOverload(req, res, next) {
       deviceId: 'smart-plug',
       relayState: 'OFF',
       voltage: latest ? latest.voltage : currentDeviceState.voltage,
-      powerWatt: 0,
+      powerWatt: latest ? latest.powerWatt : null,
       energyKwh: latest ? latest.energyKwh : currentDeviceState.energyKwh,
       lightLux: latest ? latest.lightLux : currentDeviceState.lightLux,
       isOverloaded: false,
-      overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold
+      overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold,
+      ownershipEpoch: device?.ownershipEpoch ?? null
     };
 
     const record = await SmartPlugTelemetry.create(recordData);
@@ -252,10 +208,37 @@ export async function resetOverload(req, res, next) {
  */
 export async function getHistory(req, res, next) {
   try {
+    const { device, canView } = await getDeviceAccess(req.user?._id, 'smart-plug');
+    if (!canView) {
+      return res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        message: 'Bạn không có quyền xem lịch sử thiết bị này.'
+      });
+    }
+
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
 
+    // Cách ly dữ liệu theo lần sở hữu: chỉ trả về dữ liệu phát sinh trong lần sở hữu hiện tại
+    const match = { deviceId: 'smart-plug' };
+    if (device?.claimedAt) {
+      match.createdAt = { $gte: device.claimedAt };
+    }
+    if (typeof device?.ownershipEpoch === 'number' && device.ownershipEpoch > 0) {
+      match.$and = [
+        { createdAt: { $gte: device.claimedAt } },
+        {
+          $or: [
+            { ownershipEpoch: device.ownershipEpoch },
+            { ownershipEpoch: null }
+          ]
+        }
+      ];
+      delete match.createdAt;
+    }
+
     const records = await SmartPlugTelemetry.aggregate([
-      { $match: { deviceId: 'smart-plug' } },
+      { $match: match },
       { $sort: { createdAt: -1 } },
       { $limit: limit },
       { $sort: { createdAt: 1 } }

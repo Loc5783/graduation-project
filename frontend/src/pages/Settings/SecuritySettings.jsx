@@ -8,7 +8,7 @@ import {
   revokeSessionService,
   logoutAllSessionsService
 } from '../../services/accountService.js';
-import { isPreviewMode, getSecurityStatusService } from '../../services/authService.js';
+import { isPreviewMode } from '../../services/authService.js';
 import { formatDateTime } from '../../shared/dateTimeFormatter.js';
 import { CloseIcon, AlertCircleIcon } from '../../shared/components/AuthIcons.jsx';
 
@@ -85,25 +85,6 @@ export default function SecuritySettings() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null); // { type: 'success' | 'warning' | 'danger', key?: string, text?: string }
-  const [mfaEnabled, setMfaEnabled] = useState(null);
-  const [mfaLoadError, setMfaLoadError] = useState(false);
-  const [mfaReloadKey, setMfaReloadKey] = useState(0);
-  const mfaUserIdRef = useRef(currentUser?.id);
-  mfaUserIdRef.current = currentUser?.id;
-
-  useEffect(() => {
-    setMfaEnabled(null);
-    setMfaLoadError(false);
-    if (!currentUser?.id || isPreviewMode()) return;
-    const userId = currentUser.id;
-    let cancelled = false;
-    getSecurityStatusService().then((result) => {
-      if (cancelled || mfaUserIdRef.current !== userId) return;
-      if (result.success && typeof result.data?.mfaEnabled === 'boolean') setMfaEnabled(result.data.mfaEnabled);
-      else setMfaLoadError(true);
-    });
-    return () => { cancelled = true; };
-  }, [currentUser?.id, mfaReloadKey]);
 
   // Hộp thoại xác nhận thu hồi một phiên
   const [revokingSession, setRevokingSession] = useState(null);
@@ -633,22 +614,6 @@ export default function SecuritySettings() {
       )}
 
       {/* Thẻ Quản lý Phiên đăng nhập thật */}
-      {!isPreviewMode() && <div className="security-card" style={{ marginBottom: 24 }}>
-        <div className="security-card-header"><div className="security-card-title-group">
-          <h3 className="security-extra-title">{t('security_mfa_title')}</h3>
-          <p className="security-card-desc">{t('security_mfa_desc')}</p>
-        </div></div>
-        <div style={{ padding: '0 24px 24px' }}>
-          <p>{mfaEnabled === null ? mfaLoadError ? t('security_mfa_load_error') : t('security_mfa_loading') : mfaEnabled ? t('security_mfa_required') : t('security_mfa_unavailable')}</p>
-          {mfaLoadError && <button type="button" className="btn btn-outline btn-sm" onClick={() => setMfaReloadKey((value) => value + 1)}>{t('security_btn_retry')}</button>}
-        </div>
-      </div>}
-      {!isPreviewMode() && <div className="security-card" style={{ marginBottom: 24 }}>
-        <div className="security-card-header"><div className="security-card-title-group">
-          <h3 className="security-extra-title">{t('security_idle_title')}</h3>
-          <p className="security-card-desc">{t('security_idle_desc')}</p>
-        </div></div>
-      </div>}
       {!isPreviewMode() && (
         <div className="security-card">
           <div className="security-card-header">

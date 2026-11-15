@@ -22,17 +22,17 @@ const telemetryRateLimiter = rateLimit({
 export function createSmartPlugRouter() {
   const router = express.Router();
 
-  // 1. Lấy trạng thái hiện tại (Công khai cho người dùng đã đăng nhập hoặc xem trước)
-  router.get('/state', getState);
+  // 1. Lấy trạng thái hiện tại (Bắt buộc xác thực)
+  router.get('/state', requireAuth, getState);
 
   // 2. Điều khiển rơ-le (Bắt buộc xác thực và kiểm tra bảo mật CSRF)
   router.post('/relay', requireAuth, verifyOrigin, requireJsonContentType, toggleRelay);
 
-  // 3. Tiếp nhận bản tin telemetry từ phần cứng/worker (Có rate limiting)
-  router.post('/telemetry', telemetryRateLimiter, requireJsonContentType, postTelemetry);
+  // Chưa có danh tính thiết bị/worker để xác minh bản tin HTTP. Chặn ghi cho đến khi có cơ chế đó.
+  router.post('/telemetry', telemetryRateLimiter, requireAuth, requireJsonContentType, postTelemetry);
 
-  // 4. Lấy lịch sử đo đạc vẽ biểu đồ
-  router.get('/history', getHistory);
+  // 4. Lấy lịch sử đo đạc vẽ biểu đồ (Bắt buộc xác thực)
+  router.get('/history', requireAuth, getHistory);
 
   // 5. Khôi phục trạng thái an toàn sau quá tải (Bắt buộc xác thực và kiểm tra CSRF)
   router.post('/reset-overload', requireAuth, verifyOrigin, requireJsonContentType, resetOverload);

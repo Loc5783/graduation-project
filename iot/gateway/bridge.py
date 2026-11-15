@@ -12,6 +12,12 @@ ACTUATOR_COMMANDS = {
     "BIN_OPEN": ("smart-bin", "open"),
     "BIN_CLOSE": ("smart-bin", "close"),
     "BIN_AUTO": ("smart-bin", "auto"),
+    "PLUG_LIGHT_ON": ("smart-plug", '{"relay":"ON"}'),
+    "PLUG_LIGHT_OFF": ("smart-plug", '{"relay":"OFF"}'),
+    "FAN_ON": ("smart-plug", '{"fan":"ON"}'),
+    "FAN_OFF": ("smart-plug", '{"fan":"OFF"}'),
+    "PLUG_AUTO_ON": ("smart-plug", '{"auto":true}'),
+    "PLUG_AUTO_OFF": ("smart-plug", '{"auto":false}'),
 }
 
 STATUS_COMMANDS = {
@@ -19,6 +25,7 @@ STATUS_COMMANDS = {
     "DOOR_STATUS": "smart-door-lock",
     "WINDOW_STATUS": "window-sensor",
     "ENV_STATUS": "environment-sensor",
+    "PLUG_STATUS": "smart-plug",
 }
 
 
@@ -124,15 +131,17 @@ class BrokerBridge:
         if device == "environment-sensor":
             labels = {
                 0: "GAS WARMUP",
-                1: "GAS MONITOR",
+                1: "GAS NORMAL",
                 2: "GAS WARNING",
                 3: "GAS DANGER",
             }
             return labels.get(data.get("alertLevel"), "GAS UNKNOWN")
+        if device == "smart-plug":
+            return "PLUG LIGHT " + str(data.get("relay", "UNKNOWN")) + " FAN " + str(data.get("fan", "UNKNOWN"))
         return "UNKNOWN DEVICE"
 
     def all_states(self) -> dict:
-        devices = ["smart-bin", "smart-door-lock", "window-sensor", "environment-sensor"]
+        devices = ["smart-bin", "smart-door-lock", "window-sensor", "environment-sensor", "smart-plug"]
         return {device: self.device_state(device) for device in devices}
 
 

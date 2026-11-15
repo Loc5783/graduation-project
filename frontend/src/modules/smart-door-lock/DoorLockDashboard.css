@@ -1,0 +1,792 @@
+/* ==========================================================================
+   Smart Door Lock Dashboard Styles
+   Đồng bộ với bảng màu Emerald & Cyan, hỗ trợ Dark/Light Theme & High Contrast.
+   ========================================================================== */
+
+.door-lock-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin: 1rem 0 2.5rem;
+}
+
+/* 1. Header */
+.door-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+}
+
+.door-dash-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.door-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.door-dash-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-dash-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.badge-live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-offline {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.door-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge-live .door-badge-dot {
+  box-shadow: 0 0 8px #10b981;
+}
+
+.door-dash-meta {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.door-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.door-meta-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  text-transform: uppercase;
+}
+
+.door-meta-val {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+/* Banner lỗi */
+.door-dash-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.banner-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+/* 2. KPI Grid */
+.door-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.door-kpi-card {
+  padding: 1.15rem 1.25rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.door-kpi-card:hover {
+  border-color: rgba(6, 182, 212, 0.3);
+  transform: translateY(-2px);
+}
+
+.door-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.door-kpi-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-kpi-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.icon-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.icon-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.icon-info {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+}
+
+.icon-neutral {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}
+
+.door-kpi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.door-kpi-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-kpi-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+/* 3. Visualizer Section */
+.door-main-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.25rem;
+}
+
+.door-visualizer-card {
+  padding: 1.5rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.door-visualizer-card.is-offline {
+  filter: grayscale(0.85);
+  opacity: 0.85;
+}
+
+.door-visualizer-card.is-alarm {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+.door-viz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.door-viz-badge-group {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.door-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.pill-open {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pill-closed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pill-offline {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.pill-bolt {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.door-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.door-viz-age {
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+  animation: pulse-alert 2s infinite ease-in-out;
+}
+
+@keyframes pulse-alert {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.995); }
+}
+
+.door-svg-container {
+  min-height: 260px;
+  max-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.door-viz-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  color: #f59e0b;
+}
+
+.door-side-card {
+  padding: 1.5rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.door-side-title {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-feature-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.door-feature-list strong {
+  color: var(--color-text-main, #e2e8f0);
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+/* 4. Charts Row */
+.door-charts-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.25rem;
+}
+
+.door-chart-card,
+.door-doughnut-card {
+  padding: 1.25rem 1.5rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.door-chart-header,
+.door-doughnut-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.door-chart-title,
+.door-doughnut-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-chart-subtitle,
+.door-doughnut-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.76rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.door-btn-group {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.door-range-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.door-range-btn.is-active {
+  background: #06b6d4;
+  color: #04111d;
+}
+
+.door-legend-toggles {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.door-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  background: transparent;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.door-toggle-pill.is-hidden {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.door-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dot-door { background: #10b981; }
+.dot-alarm { background: #ef4444; }
+
+.door-chart-body {
+  height: 250px;
+  position: relative;
+}
+
+.door-chart-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.85rem;
+}
+
+/* Doughnut Wrap */
+.door-doughnut-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.door-doughnut-canvas-wrap {
+  position: relative;
+  width: 170px;
+  height: 170px;
+}
+
+.door-doughnut-center-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.door-doughnut-center-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-doughnut-center-sub {
+  font-size: 0.68rem;
+  color: var(--color-text-muted, #94a3b8);
+  text-transform: uppercase;
+}
+
+.door-doughnut-legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.door-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.door-legend-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-legend-item-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.door-legend-sec {
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-legend-pct {
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+/* 5. Activity Log */
+.door-log-card {
+  padding: 1.25rem 1.5rem;
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.door-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.door-log-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.door-log-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-log-badge {
+  padding: 0.15rem 0.55rem;
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.door-log-filters {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.door-filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.73rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.door-filter-btn.is-active {
+  background: #06b6d4;
+  color: #04111d;
+}
+
+.door-log-disclaimer {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-style: italic;
+}
+
+.door-log-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.door-log-item {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.log-level-info { border-left-color: #06b6d4; }
+.log-level-warning { border-left-color: #f59e0b; }
+.log-level-danger { border-left-color: #ef4444; }
+.log-level-neutral { border-left-color: #64748b; }
+
+.door-log-item-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 75px;
+}
+
+.door-log-time {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-family: monospace;
+}
+
+.door-level-tag {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.tag-info { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+.tag-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.tag-danger { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.tag-neutral { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+.door-log-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.door-log-item-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+}
+
+.door-log-item-detail {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.door-log-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.85rem;
+}
+
+/* 6. Technical Details */
+.door-tech-details {
+  background: var(--color-bg-surface, #0b1329);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  padding: 0.9rem 1.25rem;
+}
+
+.door-tech-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-main, #f1f5f9);
+  user-select: none;
+}
+
+.door-tech-body {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.door-tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.door-tech-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.76rem;
+}
+
+.door-tech-label {
+  color: var(--color-text-muted, #94a3b8);
+  text-transform: uppercase;
+}
+
+.door-tech-value {
+  color: var(--color-text-main, #f1f5f9);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.door-tech-json {
+  margin: 0;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-size: 0.72rem;
+  color: #38bdf8;
+  max-height: 180px;
+  overflow: auto;
+}
+
+/* Responsive & Mobile Support */
+@media (max-width: 900px) {
+  .door-main-section,
+  .door-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-alert-banner,
+  .door-kpi-card {
+    animation: none;
+    transition: none;
+  }
+}

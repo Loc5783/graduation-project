@@ -22,7 +22,7 @@
 // 3. NGƯỠNG CẢNH BÁO GAS & HYSTERESIS (ĐỘ TRỄ CHỐNG NHẤP NHÁY)
 // Dải ADC 12-bit của ESP32: 0 - 4095
 // ====================================================================
-#define GAS_THRESH_WARNING   1200    // Ngưỡng chớm rò rỉ gas (Cảnh báo Vàng)
+#define GAS_THRESH_WARNING   1000    // Ngưỡng chớm rò rỉ gas (Cảnh báo Vàng)
 #define GAS_THRESH_DANGER    2200    // Ngưỡng nguy hiểm khí gas cao (Báo động Đỏ)
 #define GAS_HYSTERESIS       150     // Độ trễ chống rung lắc trạng thái
 
@@ -39,7 +39,7 @@ enum AlertLevel : uint8_t {
 // ====================================================================
 // 5. TÙY CHỌN ESP-NOW PHỤ TRỢ (NẾU MUỐN PHÁT ĐỒNG THỜI CHO MÀN HÌNH TFT)
 // ====================================================================
-#define ENABLE_ESPNOW_BROADCAST 0    // Đặt 1 nếu muốn phát ESP-NOW song song với MQTT
+#define ENABLE_ESPNOW_BROADCAST 1    // Phát cho màn hình song song với MQTT
 #define ESPNOW_WIFI_CHANNEL     1
 
 #endif // CONFIG_SENSOR_H

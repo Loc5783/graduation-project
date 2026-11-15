@@ -6,10 +6,12 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { LanguageProvider } from '../context/LanguageContext.jsx';
 import { AuthProvider, useAuthContext } from '../context/AuthContext.jsx';
 import { DeviceProvider } from '../context/DeviceContext.jsx';
+import { MyDevicesProvider } from '../context/MyDevicesContext.jsx';
 import { SettingsProvider, DEFAULT_APPEARANCE } from '../context/SettingsContext.jsx';
 import * as accountService from '../services/accountService.js';
 import * as settingsService from '../services/settingsService.js';
 import * as authService from '../services/authService.js';
+import * as myDeviceService from '../services/myDeviceService.js';
 
 import Layout from '../shared/components/Layout.jsx';
 import SettingsLayout from '../pages/Settings/SettingsLayout.jsx';
@@ -233,6 +235,54 @@ describe('Giai đoạn 2A: Thông tin Tài khoản thật & Cập nhật Hồ s�
       // Có link tới /devices/smart-speaker
       const links = Array.from(container.querySelectorAll('.account-dev-link'));
       expect(links.some((l) => l.getAttribute('href') === '/devices/smart-speaker')).toBe(true);
+    });
+
+    it('Tài khoản có owned cũ trong session nhưng chưa ghép nối thiết bị qua MyDevices: trang Tài khoản phải hiển thị không có thiết bị', async () => {
+      const legacyUser = {
+        id: 'u_legacy_owned',
+        name: 'Người Dùng Cũ',
+        email: 'legacy@example.com',
+        role: 'member',
+        owned: ['smart-door-lock', 'smart-plug']
+      };
+
+      vi.spyOn(authService, 'getMeService').mockResolvedValue({
+        success: true,
+        status: 200,
+        data: { user: legacyUser }
+      });
+
+      vi.spyOn(myDeviceService, 'getMyDevices').mockResolvedValue({
+        success: true,
+        data: { devices: [] }
+      });
+
+      vi.spyOn(settingsService, 'getSettingsService').mockResolvedValue({
+        success: true,
+        status: 200,
+        data: { appearance: { ...DEFAULT_APPEARANCE } }
+      });
+
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={['/settings/account']}>
+            <LanguageProvider>
+              <AuthProvider enableDemoAuth={false}>
+                <MyDevicesProvider>
+                  <AccountSettings />
+                </MyDevicesProvider>
+              </AuthProvider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+
+      // Phải hiển thị thông điệp chưa có thiết bị, không fallback sang owned cũ
+      expect(container.querySelector('.account-no-devices')).not.toBeNull();
+      expect(container.querySelector('.account-no-devices').textContent).toContain('Bạn chưa được phân công thiết bị.');
+      expect(container.querySelectorAll('.account-device-item')).toHaveLength(0);
+      expect(container.textContent).not.toContain('Khóa cửa thông minh');
+      expect(container.textContent).not.toContain('Ổ cắm thông minh');
     });
 
     it('ID thiết bị lạ không có trong registry: Hiển thị fallback an toàn, không làm ứng dụng crash', async () => {

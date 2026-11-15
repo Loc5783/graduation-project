@@ -1,12 +1,13 @@
 import windowSensorConfig from './config.js';
 import DevicePage from '../../shared/components/DevicePage.jsx';
-import WindowSensorOwnerArea from './OwnerArea.jsx';
+import WindowSensorDashboard from './WindowSensorDashboard.jsx';
 
 export default function WindowSensorModule() {
   return (
     <DevicePage
       config={windowSensorConfig}
-      ownerArea={<WindowSensorOwnerArea />}
+      hideDescription={true}
+      ownerArea={<WindowSensorDashboard />}
     />
   );
 }

@@ -18,7 +18,7 @@ export default function NotificationItem({
   isMarking = false,
   isCompact = false
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { currentSettings } = useSettings();
 
   if (!notification) return null;
@@ -39,6 +39,29 @@ export default function NotificationItem({
       : t('notif_unknown_browser');
 
     description = `${t('notif_device_label')} ${device} • ${t('notif_browser_label')} ${browser}`;
+  }
+
+  if (eventCode === 'DEVICE_DISCONNECTED' || eventCode === 'DEVICE_ALERT') {
+    const deviceId = typeof params?.deviceId === 'string' ? params.deviceId : '';
+    const known = ['smart-door-lock', 'window-sensor', 'smart-bin', 'environment-sensor', 'smart-plug'];
+    const device = known.includes(deviceId) ? deviceId : (lang === 'en' ? 'Unknown device' : 'Thiết bị chưa xác định');
+    if (eventCode === 'DEVICE_DISCONNECTED') {
+      title = lang === 'en' ? 'Device disconnected' : 'Thiết bị mất kết nối';
+      description = lang === 'en' ? `${device} stopped sending fresh data.` : `${device} đã ngừng gửi dữ liệu mới.`;
+    } else {
+      title = lang === 'en' ? 'Device alert' : 'Cảnh báo thiết bị';
+      const labels = {
+        GAS_WARNING: ['Khí gas: mức cảnh báo cảm biến', 'Gas sensor warning level'],
+        GAS_DANGER: ['Khí gas: mức nguy hiểm cảm biến', 'Gas sensor danger level'],
+        WINDOW_ALARM: ['Cảnh báo cửa sổ', 'Window alarm'],
+        FORCED_OPEN: ['Khóa cửa: tín hiệu mở cưỡng bức', 'Door lock forced-open signal'],
+        HELD_OPEN: ['Khóa cửa: tín hiệu mở lâu', 'Door lock held-open signal'],
+        TAMPER: ['Khóa cửa: tín hiệu can thiệp', 'Door lock tamper signal'],
+        DOOR_ALARM: ['Khóa cửa: báo động', 'Door lock alarm']
+      };
+      const label = labels[params?.alertKind];
+      description = `${device}: ${label ? label[lang === 'en' ? 1 : 0] : (lang === 'en' ? 'Alert received' : 'Đã nhận cảnh báo')}`;
+    }
   }
 
   // 2. Định dạng ngày giờ theo cài đặt người dùng

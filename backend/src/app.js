@@ -6,15 +6,20 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import User from './models/User.js';
 import UserSession from './models/UserSession.js';
-import EmailChallenge from './models/EmailChallenge.js';
 import Notification from './models/Notification.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import { createSettingsRouter } from './routes/settingsRoutes.js';
 import { createAccountRouter } from './routes/accountRoutes.js';
 import { createNotificationRouter } from './routes/notificationRoutes.js';
-import { createAdminRouter } from './routes/adminRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
+import { createAdminRouter } from './routes/adminRoutes.js';
+import { createLiveDeviceRouter } from './routes/liveDeviceRoutes.js';
+import { createPrivacyDataRouter } from './routes/privacyDataRoutes.js';
+import { createDeviceHistoryRouter } from './routes/deviceHistoryRoutes.js';
+import DeviceObservation from './models/DeviceObservation.js';
+import RegisteredDevice from './models/RegisteredDevice.js';
+import { createMyDeviceRouter } from './routes/myDeviceRoutes.js';
 import { EnvironmentSensorTelemetry } from '../modules/environment-sensor/telemetry.js';
 import { createEnvironmentSensorRouter } from '../modules/environment-sensor/router.js';
 import { smartPlugRoutes } from '../modules/smart-plug/smartPlugRoutes.js';
@@ -28,7 +33,6 @@ import { smartPlugRoutes } from '../modules/smart-plug/smartPlugRoutes.js';
  */
 export async function createApp(options = {}) {
   const app = express();
-  if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
   // Đảm bảo SESSION_SECRET tồn tại, không dùng chuỗi mặc định tĩnh
   const sessionSecret = options.sessionSecret || process.env.SESSION_SECRET;
@@ -62,7 +66,6 @@ export async function createApp(options = {}) {
     }
     try {
       await User.init();
-      await EmailChallenge.init();
       console.log('[Database] Chỉ mục Unique Index email của User đã sẵn sàng.');
     } catch (indexError) {
       throw new Error(`Khởi tạo chỉ mục Unique Index email thất bại: ${indexError.message}`);
@@ -104,6 +107,8 @@ export async function createApp(options = {}) {
 
     try {
       await Notification.init();
+      await DeviceObservation.init();
+      await RegisteredDevice.init();
       console.log('[Database] Chỉ mục Notification đã sẵn sàng.');
     } catch (indexError) {
       throw new Error(`Khởi tạo chỉ mục Notification thất bại: ${indexError.message}`);
@@ -151,6 +156,7 @@ export async function createApp(options = {}) {
   // 5. Mount các route xác thực
   const authRouter = options.authRouter || createAuthRouter(options);
   app.use('/api/auth', authRouter);
+  app.use('/api/live-devices', createLiveDeviceRouter(options.liveDeviceOptions));
 
   // 6. Mount các route cài đặt (Settings)
   const settingsRouter = options.settingsRouter || createSettingsRouter(options);
@@ -164,11 +170,14 @@ export async function createApp(options = {}) {
   const notificationRouter = options.notificationRouter || createNotificationRouter(options);
   app.use('/api/notifications', notificationRouter);
 
-  // 9. Mount các route quản trị hệ thống (Admin)
   const adminRouter = options.adminRouter || createAdminRouter(options);
   app.use('/api/admin', adminRouter);
+  app.use('/api/privacy-data', createPrivacyDataRouter());
+  app.use('/api/device-history', createDeviceHistoryRouter());
+  app.use('/api/my-devices', createMyDeviceRouter(options.myDeviceOptions));
 
-  // 10. Module Cảm biến môi trường (Environment Sensor)
+  // 9. Xử lý đường dẫn không tồn tại (404 Handler)
+  // Module Cảm biến môi trường (Environment Sensor)
   const envTelemetry = options.environmentSensorTelemetry || new EnvironmentSensorTelemetry();
   app.locals.environmentSensorTelemetry = envTelemetry;
   app.use('/api/environment-sensor', createEnvironmentSensorRouter(envTelemetry, options.environmentSensorOptions));

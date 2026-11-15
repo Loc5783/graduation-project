@@ -8,9 +8,10 @@ import {
   updateUserRole,
   createUser,
   deleteUser,
-  getSystemStatus,
-  listAuditLogs
+  listAuditLogs,
+  setUserLock
 } from '../controllers/adminController.js';
+import { createSystemStatusHandler } from '../controllers/adminSystemController.js';
 
 /**
  * Khởi tạo Admin Router bảo vệ toàn diện bằng requireAuth + requireAdmin
@@ -29,11 +30,12 @@ export function createAdminRouter(options = {}) {
   // 1. Quản lý người dùng & phân quyền (Users & RBAC)
   router.get('/users', listUsers);
   router.patch('/users/:userId/role', originMiddleware, jsonMiddleware, updateUserRole);
+  router.patch('/users/:userId/lock', originMiddleware, jsonMiddleware, setUserLock);
   router.post('/users', originMiddleware, jsonMiddleware, createUser);
   router.delete('/users/:userId', originMiddleware, deleteUser);
 
   // 2. Trạng thái hệ thống (System Status)
-  router.get('/system-status', getSystemStatus);
+  router.get('/system-status', createSystemStatusHandler(options.systemStatusOptions));
 
   // 3. Nhật ký kiểm toán (Audit Logs)
   router.get('/audit-logs', listAuditLogs);

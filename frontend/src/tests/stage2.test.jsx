@@ -192,11 +192,14 @@ describe('Giai đoạn 2: Nối Frontend với Backend Xác thực thật', () =
         });
 
         expect(container.textContent).toContain(device.name);
-        const ownerArea = container.querySelector('.owner-area-container');
-        expect(ownerArea).not.toBeNull();
-        expect(ownerArea.textContent).toContain(device.owner);
-        expect(ownerArea.textContent).toContain('Khu vực phát triển');
-        expect(container.textContent).toContain('chưa đối chiếu backend/firmware');
+        if (['smart-door-lock', 'window-sensor', 'environment-sensor'].includes(device.id)) {
+          expect(container.querySelector('.live-device-panel')).not.toBeNull();
+          expect(container.querySelector('.live-device-card')).not.toBeNull();
+          expect(container.querySelector('.live-device-badge.is-live')).toBeNull();
+        } else {
+          expect(container.querySelector('.owner-area-container')).not.toBeNull();
+        }
+
       }
     });
 

@@ -18,22 +18,19 @@ const smartPlugTelemetrySchema = new mongoose.Schema(
     },
     voltage: {
       type: Number,
-      required: true,
-      default: 220.0
+      default: null
     },
     powerWatt: {
       type: Number,
-      required: true,
-      default: 0
+      default: null
     },
     energyKwh: {
       type: Number,
-      required: true,
-      default: 0
+      default: null
     },
     lightLux: {
       type: Number,
-      default: 0
+      default: null
     },
     isOverloaded: {
       type: Boolean,
@@ -42,6 +39,18 @@ const smartPlugTelemetrySchema = new mongoose.Schema(
     overloadThreshold: {
       type: Number,
       default: 2000
+    },
+    verifiedHardware: {
+      type: Boolean,
+      default: false
+    },
+    isUntrusted: {
+      type: Boolean,
+      default: true
+    },
+    ownershipEpoch: {
+      type: Number,
+      default: null
     }
   },
   {

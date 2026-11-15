@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 import { ALLOWED_NOTIFICATION_TYPES_FIELDS } from '../constants/notificationDefaults.js';
 
 export const NOTIFICATION_EVENT_CODES = Object.freeze([
-  'SESSION_REVOKED'
+  'SESSION_REVOKED',
+  'DEVICE_DISCONNECTED',
+  'DEVICE_ALERT'
 ]);
 
 export const NOTIFICATION_SEVERITIES = Object.freeze([

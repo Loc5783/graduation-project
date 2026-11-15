@@ -205,14 +205,12 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0
     },
-    emailVerifiedAt: { type: Date, default: null },
-    emailVerificationRequired: { type: Boolean, default: false },
-    mfaEnabled: { type: Boolean, default: false },
     role: {
       type: String,
       enum: ['admin', 'member', 'viewer'],
       default: 'viewer'
     },
+    isLocked: { type: Boolean, default: false },
     owned: {
       type: [String],
       default: []
@@ -231,8 +229,6 @@ const userSchema = new mongoose.Schema(
         delete ret.__v;
         delete ret.passwordHash; // Tuyệt đối không để lộ mật khẩu băm ra JSON
         delete ret.authVersion; // Không để lộ phiên bản xác thực nội bộ ra JSON
-        delete ret.emailVerifiedAt;
-        delete ret.emailVerificationRequired;
         return ret;
       }
     }

@@ -43,3 +43,14 @@ Desktop.ini
 **/sdkconfig.before_*
 **/credentials.local.json
 **/passwords.txt
+backend/device-pairing-codes.local.txt
+
+# Local workspace artifacts and private Smart Plug Wi-Fi/MQTT configuration
+.backup_phase1a/
+.backup_phase1b/
+.vscode/
+team-upstream-integration/
+PROMPT-*.md
+**/__pycache__/
+*.pyc
+iot/firmware/smart-plug/IOT/include/config.h

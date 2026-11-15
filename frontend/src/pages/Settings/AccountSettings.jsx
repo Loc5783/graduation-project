@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext.jsx';
 import { useLanguage, getDeviceDisplayName, getErrorMessage } from '../../context/LanguageContext.jsx';
+import { useMyDevices } from '../../context/MyDevicesContext.jsx';
 import { deviceRegistry } from '../../modules/registry.js';
 import { updateProfileService } from '../../services/accountService.js';
 import { isPreviewMode } from '../../services/authService.js';
@@ -259,7 +260,10 @@ export default function AccountSettings() {
     return t('user_role_viewer');
   };
 
-  const ownedDevices = Array.isArray(currentUser?.owned) ? currentUser.owned : [];
+  const myDevices = useMyDevices();
+  const ownedDevices = myDevices?.isProvided
+    ? (Array.isArray(myDevices.devices) ? myDevices.devices.map((d) => d.id) : [])
+    : (Array.isArray(currentUser?.owned) ? currentUser.owned : []);
 
   return (
     <div className="settings-section account-settings-page">
@@ -430,6 +434,9 @@ export default function AccountSettings() {
 
         <div className="account-devices-section">
           <h4 className="account-devices-title">{t('account_assigned_devices')}</h4>
+          <p className="account-devices-hint" style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #888)', margin: '0.25rem 0 0.75rem' }}>
+            {t('account_devices_rbac_note')}
+          </p>
 
           {ownedDevices.length === 0 ? (
             <p className="account-no-devices">{t('account_no_devices')}</p>

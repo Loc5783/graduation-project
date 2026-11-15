@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../../context/AuthContext.jsx';
 import { useLanguage } from '../../context/LanguageContext.jsx';
+import { useMyDevices } from '../../context/MyDevicesContext.jsx';
 import { canEditDevice, getPermissionExplanation } from '../../shared/roles.js';
 import {
   getSmartPlugState,
@@ -112,8 +113,12 @@ const i18n = {
     fanOn: 'Bật quạt',
     fanOff: 'Tắt quạt',
     btnAuto: 'Tự động',
-    // Đo điện
-    metricPower: 'Công suất tiêu thụ',
+    // Đo điện & Relay
+    metricPower: 'Trạng thái kênh Relay',
+    powerNotice: 'Chỉ hiển thị trạng thái lệnh relay phần mềm; phần cứng không có cảm biến đo điện áp, dòng điện hay công suất thật.',
+    brokerNotice: 'Giới hạn hạ tầng: Smart Plug sử dụng broker MQTT công khai (EMQX Cloud WSS 8084) không có xác thực, chưa tích hợp broker Mosquitto nội bộ có ACL.',
+    ledHint: 'Trạng thái lệnh relay (không khẳng định bóng đèn sáng thực tế)',
+    fanHint: 'Trạng thái lệnh relay (không khẳng định quạt quay thực tế)',
     // Hẹn giờ kiểu iPhone
     timerTitle: 'Hẹn giờ tắt thiết bị',
     targetBoth: 'Cả hai thiết bị',
@@ -140,7 +145,11 @@ const i18n = {
     fanOn: 'Start Fan',
     fanOff: 'Stop Fan',
     btnAuto: 'Auto',
-    metricPower: 'Power Consumption',
+    metricPower: 'Relay Channel State',
+    powerNotice: 'Displays software relay switch state only. Hardware lacks voltage, current, or real power metering sensors.',
+    brokerNotice: 'Infrastructure limitation: Smart Plug uses an unauthenticated public MQTT broker (EMQX Cloud WSS 8084); internal Mosquitto broker with ACL is not yet integrated.',
+    ledHint: 'Relay command state (does not confirm physical bulb illumination)',
+    fanHint: 'Relay command state (does not confirm physical fan rotation)',
     timerTitle: 'Device Auto-Off Timer',
     targetBoth: 'Both Devices',
     targetLight: 'LED Light',
@@ -179,8 +188,9 @@ export default function SmartPlugOwnerArea() {
   const isVi = language === 'vi';
   const text = isVi ? i18n.vi : i18n.en;
 
+  const myDevices = useMyDevices();
   const preview = isPreviewMode();
-  const userCanEdit = currentUser ? canEditDevice(currentUser, 'smart-plug') : preview;
+  const userCanEdit = preview || (myDevices?.isProvided ? myDevices.isOwner('smart-plug') : canEditDevice(currentUser, 'smart-plug'));
   const permissionMessage = getPermissionExplanation(currentUser, 'smart-plug');
 
   // Trạng thái Bật/Tắt bóng LED (Rơ-le 1)
@@ -210,6 +220,7 @@ export default function SmartPlugOwnerArea() {
 
   // Kết nối MQTT thời gian thực với phần cứng ESP32 qua EMQX
   const {
+    isMqttConnected,
     isDeviceOnline,
     relayState: mqttRelay,
     fanState: mqttFan,
@@ -218,7 +229,7 @@ export default function SmartPlugOwnerArea() {
     publishRelayCommand,
     publishFanCommand,
     publishAutoCommand
-  } = useSmartPlugMQTT();
+  } = useSmartPlugMQTT({ canPublish: Boolean(userCanEdit) });
 
   // Đồng bộ trạng thái thực tế từ ESP32 khi nhận bản tin MQTT
   useEffect(() => {
@@ -471,8 +482,6 @@ export default function SmartPlugOwnerArea() {
     if (t === 'fan') return text.targetFan;
     return text.targetBoth;
   };
-
-  const totalPowerW = (isRelayOn ? 50 : 0) + (isFanOn ? 1 : 0);
 
   return (
     <div className="owner-area-container apple-smart-plug" data-module="smart-plug" data-owner="nhatanh">
@@ -1176,6 +1185,23 @@ export default function SmartPlugOwnerArea() {
         }
       `}</style>
 
+      {/* Thanh thông tin kết nối Broker EMQX & Trạng thái thiết bị */}
+      <div className="apple-connection-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', padding: '0.65rem 0.95rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', fontSize: '0.78rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.65rem', borderRadius: '9999px', background: isMqttConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: isMqttConnected ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+            {isMqttConnected ? (isVi ? 'Broker EMQX: Đã kết nối' : 'EMQX Broker: Connected') : (isVi ? 'Broker EMQX: Đang kết nối...' : 'EMQX Broker: Connecting...')}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.65rem', borderRadius: '9999px', background: isDeviceOnline ? 'rgba(6, 182, 212, 0.15)' : 'rgba(148, 163, 184, 0.15)', color: isDeviceOnline ? '#06b6d4' : '#94a3b8', fontWeight: 600 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+            {isDeviceOnline ? (isVi ? 'Thiết bị ESP32: Trực tuyến' : 'ESP32: Online') : (isVi ? 'Thiết bị ESP32: Ngoại tuyến' : 'ESP32: Offline')}
+          </span>
+        </div>
+        <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
+          {text.brokerNotice}
+        </span>
+      </div>
+
       {/* Thông báo thao tác nếu có */}
       {notice && (
         <div className={`alert alert-${notice.type}`} role="alert" style={{ padding: '0.45rem 0.8rem', fontSize: '0.78rem', borderRadius: '10px' }}>
@@ -1241,16 +1267,21 @@ export default function SmartPlugOwnerArea() {
         </div>
       )}
 
-      {/* 1. Đo Công Suất Tiêu Thụ Đưa Ra Chính Giữa */}
+      {/* 1. Trạng thái lệnh Relay Trung tâm */}
       <div className="apple-power-center-wrap">
-        <div className="apple-stat-card-center">
-          <div className="apple-stat-icon-wrap" style={{ color: '#38bdf8' }}>
+        <div className="apple-stat-card-center" style={{ flexDirection: 'column', padding: '0.65rem 1.5rem', textAlign: 'center', gap: '0.35rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#38bdf8' }}>
             <IconBolt />
+            <span className="apple-stat-label" style={{ margin: 0, fontWeight: 600 }}>{text.metricPower}</span>
           </div>
-          <div>
-            <div className="apple-stat-label">{text.metricPower}</div>
-            <div className="apple-stat-val" style={{ color: '#38bdf8' }}>{totalPowerW} W</div>
+          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
+            <span>Đèn LED: <strong style={{ color: isRelayOn ? '#10b981' : '#94a3b8' }}>{isRelayOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
+            <span style={{ color: '#475569' }}>|</span>
+            <span>Quạt 5V: <strong style={{ color: isFanOn ? '#10b981' : '#94a3b8' }}>{isFanOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
           </div>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', maxWidth: '540px', lineHeight: 1.35 }}>
+            {text.powerNotice}
+          </span>
         </div>
       </div>
 
@@ -1269,6 +1300,7 @@ export default function SmartPlugOwnerArea() {
                   ? (isRelayOn ? text.statusAutoOn : text.statusAutoOff)
                   : (isRelayOn ? text.statusOn : text.statusOff)}
               </span>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px' }}>{text.ledHint}</div>
               {/* Thẻ ẩn trợ năng & tương thích test */}
               <span style={{ display: 'none' }}>
                 {isRelayOn ? 'Đèn đang bật' : 'Đèn đang tắt'}
@@ -1316,6 +1348,7 @@ export default function SmartPlugOwnerArea() {
               <span className={`apple-device-pill ${isFanOn ? 'fan-on' : 'off'}`}>
                 {isFanOn ? text.fanRunning : text.statusOff}
               </span>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px' }}>{text.fanHint}</div>
             </div>
           </div>
 

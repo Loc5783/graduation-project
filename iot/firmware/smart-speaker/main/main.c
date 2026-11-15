@@ -15,6 +15,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
@@ -53,6 +54,11 @@
 #define COMMAND_DOOR_STATUS 11
 #define COMMAND_WINDOW_STATUS 12
 #define COMMAND_ENV_STATUS 13
+#define COMMAND_FAN_ON 14
+#define COMMAND_FAN_OFF 15
+#define COMMAND_PLUG_LIGHT_ON 16
+#define COMMAND_PLUG_LIGHT_OFF 17
+#define COMMAND_PLUG_STATUS 18
 
 static const esp_afe_sr_iface_t *afe_handle;
 static esp_afe_sr_data_t *afe_data;
@@ -61,6 +67,8 @@ static i2s_chan_handle_t mic_rx;
 static i2s_chan_handle_t speaker_tx;
 static spi_device_handle_t tft_spi;
 static uint16_t *tft_frame;
+static uint8_t *tft_dma_buffer;
+static SemaphoreHandle_t tft_mutex;
 static volatile bool running = true;
 static volatile bool awake = false;
 static QueueHandle_t command_log_queue;
@@ -70,6 +78,16 @@ typedef struct {
     uint32_t sequence;
 } command_log_t;
 static uint32_t command_sequence;
+static SemaphoreHandle_t speaker_mutex;
+#define STATUS_AUDIO(name) \
+    extern const uint8_t name##_start[] asm("_binary_" #name "_wav_start"); \
+    extern const uint8_t name##_end[] asm("_binary_" #name "_wav_end")
+STATUS_AUDIO(gas_normal);
+STATUS_AUDIO(gas_warning);
+STATUS_AUDIO(gas_danger);
+STATUS_AUDIO(gas_warmup);
+STATUS_AUDIO(gas_unknown);
+STATUS_AUDIO(device_offline);
 static void tft_fill(uint16_t color);
 static void tft_show_message(uint16_t background, uint16_t foreground,
                              const char *line1, const char *line2);
@@ -127,15 +145,14 @@ static void tft_fill(uint16_t color)
 {
     tft_set_window(0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1);
 
-    uint8_t pixels[512];
-    for (size_t i = 0; i < sizeof(pixels); i += 2) {
-        pixels[i] = color >> 8;
-        pixels[i + 1] = color;
+    for (size_t i = 0; i < 512; i += 2) {
+        tft_dma_buffer[i] = color >> 8;
+        tft_dma_buffer[i + 1] = color;
     }
     int remaining = TFT_WIDTH * TFT_HEIGHT;
     while (remaining > 0) {
         int count = remaining > 256 ? 256 : remaining;
-        tft_send(pixels, count * 2, 1);
+        tft_send(tft_dma_buffer, count * 2, 1);
         remaining -= count;
     }
 }
@@ -231,20 +248,27 @@ static void frame_waveform(int center_y, uint16_t color)
 
 static void tft_push_frame(void)
 {
+    // Hide the panel while replacing the whole framebuffer so intermediate
+    // scan lines from the previous screen are never visible.
+    tft_command(0x28); // Display off
     tft_set_window(0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1);
     for (int offset = 0; offset < TFT_WIDTH * TFT_HEIGHT; offset += 256) {
         int count = TFT_WIDTH * TFT_HEIGHT - offset;
         if (count > 256) count = 256;
-        tft_send(tft_frame + offset, count * sizeof(uint16_t), 1);
+        memcpy(tft_dma_buffer, tft_frame + offset, count * sizeof(uint16_t));
+        tft_send(tft_dma_buffer, count * sizeof(uint16_t), 1);
     }
+    tft_command(0x29); // Display on
 }
 
 static void tft_show_message(uint16_t background, uint16_t foreground,
                              const char *line1, const char *line2)
 {
+    xSemaphoreTake(tft_mutex, portMAX_DELAY);
     (void)foreground;
     if (!tft_frame) {
         tft_fill(background);
+        xSemaphoreGive(tft_mutex);
         return;
     }
     uint16_t dark = swap16(0x0841);
@@ -262,10 +286,12 @@ static void tft_show_message(uint16_t background, uint16_t foreground,
     frame_center_text("OFFLINE AI", 279, 1, 0x7bef);
     frame_rect(0, TFT_HEIGHT - 9, TFT_WIDTH, 9, background);
     tft_push_frame();
+    xSemaphoreGive(tft_mutex);
 }
 
 static void tft_show_recognized(const char *text)
 {
+    xSemaphoreTake(tft_mutex, portMAX_DELAY);
     char first[15] = {0};
     char second[15] = {0};
     size_t length = strlen(text);
@@ -293,10 +319,13 @@ static void tft_show_recognized(const char *text)
     frame_center_text("PROCESSING", 280, 1, 0x7dff);
     frame_rect(0, TFT_HEIGHT - 9, TFT_WIDTH, 9, 0xffe0);
     tft_push_frame();
+    xSemaphoreGive(tft_mutex);
 }
 
 static void init_tft(void)
 {
+    tft_mutex = xSemaphoreCreateMutex();
+    assert(tft_mutex);
     gpio_config_t control_pins = {
         .pin_bit_mask = (1ULL << TFT_DC) | (1ULL << TFT_RST),
         .mode = GPIO_MODE_OUTPUT,
@@ -344,6 +373,8 @@ static void init_tft(void)
     vTaskDelay(pdMS_TO_TICKS(100));
     tft_frame = heap_caps_malloc(TFT_WIDTH * TFT_HEIGHT * sizeof(uint16_t),
                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    tft_dma_buffer = heap_caps_malloc(512, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    assert(tft_dma_buffer);
     ESP_LOGI(TAG, "TFT ST7789 240x320 initialized at 10 MHz");
     tft_fill(0xf800);
     vTaskDelay(pdMS_TO_TICKS(300));
@@ -356,6 +387,8 @@ static void init_tft(void)
 
 static void init_speaker(void)
 {
+    speaker_mutex = xSemaphoreCreateMutex();
+    assert(speaker_mutex);
     i2s_chan_config_t channel_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&channel_cfg, &speaker_tx, NULL));
     i2s_std_config_t config = {
@@ -393,6 +426,7 @@ static void speaker_play_wav(const uint8_t *start, const uint8_t *end)
         ESP_LOGE(TAG, "Invalid embedded WAV");
         return;
     }
+    xSemaphoreTake(speaker_mutex, portMAX_DELAY);
     const int16_t *mono = (const int16_t *)pcm;
     size_t samples = pcm_size / sizeof(int16_t);
     int16_t stereo[256 * 2];
@@ -409,6 +443,17 @@ static void speaker_play_wav(const uint8_t *start, const uint8_t *end)
                                            &written, portMAX_DELAY));
         offset += count;
     }
+    xSemaphoreGive(speaker_mutex);
+}
+
+static void speak_gas_status(const char *display)
+{
+    if (!strcmp(display, "GAS NORMAL")) speaker_play_wav(gas_normal_start, gas_normal_end);
+    else if (!strcmp(display, "GAS WARNING")) speaker_play_wav(gas_warning_start, gas_warning_end);
+    else if (!strcmp(display, "GAS DANGER")) speaker_play_wav(gas_danger_start, gas_danger_end);
+    else if (!strcmp(display, "GAS WARMUP")) speaker_play_wav(gas_warmup_start, gas_warmup_end);
+    else if (!strcmp(display, "DEVICE OFFLINE")) speaker_play_wav(device_offline_start, device_offline_end);
+    else speaker_play_wav(gas_unknown_start, gas_unknown_end);
 }
 
 static void init_microphone(void)
@@ -490,6 +535,11 @@ static const char *remote_command_name(int command)
     case COMMAND_DOOR_STATUS: return "DOOR_STATUS";
     case COMMAND_WINDOW_STATUS: return "WINDOW_STATUS";
     case COMMAND_ENV_STATUS: return "ENV_STATUS";
+    case COMMAND_FAN_ON: return "FAN_ON";
+    case COMMAND_FAN_OFF: return "FAN_OFF";
+    case COMMAND_PLUG_LIGHT_ON: return "PLUG_LIGHT_ON";
+    case COMMAND_PLUG_LIGHT_OFF: return "PLUG_LIGHT_OFF";
+    case COMMAND_PLUG_STATUS: return "PLUG_STATUS";
     default: return NULL;
     }
 }
@@ -539,7 +589,7 @@ static void recognition_task(void *arg)
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_LIGHT_OFF, "TURN LIGHT OFF"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_OPEN, "OPEN THE BIN"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_CLOSE, "CLOSE THE BIN"));
-    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_AUTO, "AUTOMATIC BIN"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_AUTO, "SET BIN TO AUTOMATIC MODE"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_STATUS, "BIN STATUS"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_STATUS, "CHECK THE BIN"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_BIN_STATUS, "CHECK BIN"));
@@ -553,6 +603,17 @@ static void recognition_task(void *arg)
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_ENV_STATUS, "GAS STATUS"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_ENV_STATUS, "CHECK THE GAS"));
     ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_ENV_STATUS, "GAS LEVEL"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_ENV_STATUS, "GAS READING"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_ENV_STATUS, "TEMPERATURE READING"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_ON, "TURN ON THE FAN"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_ON, "FAN ON"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_ON, "START THE FAN"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_OFF, "TURN OFF THE FAN"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_OFF, "FAN OFF"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_FAN_OFF, "STOP THE FAN"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_PLUG_LIGHT_ON, "PLUG LIGHT ON"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_PLUG_LIGHT_OFF, "PLUG LIGHT OFF"));
+    ESP_ERROR_CHECK(esp_mn_commands_add(COMMAND_PLUG_STATUS, "CHECK THE PLUG"));
     assert(esp_mn_commands_update() == NULL);
     multinet->print_active_speech_commands(model_data);
     ESP_LOGI(TAG, "Say Hi ESP, wait, then say turn on the light or turn off the light.");
@@ -728,6 +789,7 @@ static void dashboard_log_task(void *arg)
                     *end = '\0';
                     tft_show_message(0x001f, 0xffff, display, "LATEST STATUS");
                     ESP_LOGI(TAG, "Device status: %s", display);
+                    if (!strcmp(entry.command, "ENV_STATUS")) speak_gas_status(display);
                 }
             }
         }

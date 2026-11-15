@@ -39,19 +39,6 @@ export async function getSmartPlugHistory(limit = 20) {
 }
 
 /**
- * Gửi bản tin đo lường lên backend
- */
-export async function postSmartPlugTelemetry(telemetryData) {
-  return await apiRequest('/api/devices/smart-plug/telemetry', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(telemetryData)
-  });
-}
-
-/**
  * Khôi phục trạng thái quá tải an toàn
  */
 export async function resetSmartPlugOverload() {

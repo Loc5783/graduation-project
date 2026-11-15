@@ -1,51 +1,45 @@
 import { Router } from 'express';
 import requireAuth from '../../src/middleware/auth.js';
-
-function isAuthOrDev(request, response, next) {
-  if (request.session?.userId) {
-    return next();
-  }
-  // Cho phép xem trong chế độ development hoặc cờ xem trước
-  if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_ANONYMOUS_TELEMETRY === 'true') {
-    return next();
-  }
-  return requireAuth(request, response, next);
-}
+import { getDeviceAccess } from '../../src/services/deviceAccess.js';
 
 export function createEnvironmentSensorRouter(
   telemetry,
-  { authenticate = isAuthOrDev, heartbeatMs = 15000 } = {}
+  { authenticate = requireAuth, heartbeatMs = 15000 } = {}
 ) {
   const router = Router();
   router.use(authenticate);
 
-  router.get('/state', (request, response) => {
-    response.set('Cache-Control', 'no-store');
-    response.json({ success: true, data: telemetry.getSnapshot() });
+  router.get('/state', async (request, response) => {
+    try {
+      const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+      if (!canView) {
+        return response.status(403).json({
+          success: false,
+          code: 'FORBIDDEN',
+          message: 'Bạn không có quyền xem dữ liệu cảm biến môi trường.'
+        });
+      }
+      response.set('Cache-Control', 'no-store');
+      return response.json({ success: true, data: telemetry.getSnapshot() });
+    } catch (err) {
+      return response.status(500).json({ success: false, code: 'SERVER_ERROR' });
+    }
   });
 
-  router.post('/command', (request, response) => {
-    const user = request.user;
-    const canControl = user && (
-      user.role === 'admin' ||
-      (user.role === 'member' && Array.isArray(user.owned) && user.owned.includes('environment-sensor'))
-    );
-
-    if (user && !canControl) {
-      return response.status(403).json({
-        success: false,
-        code: 'FORBIDDEN',
-        message: 'Tài khoản của bạn không có quyền điều khiển thiết bị này. Chỉ Quỳnh hoặc Quản trị viên mới được thao tác.'
-      });
+  router.get('/events', async (request, response) => {
+    try {
+      const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+      if (!canView) {
+        return response.status(403).json({
+          success: false,
+          code: 'FORBIDDEN',
+          message: 'Bạn không có quyền xem luồng sự kiện cảm biến môi trường.'
+        });
+      }
+    } catch {
+      return response.status(500).json({ success: false, code: 'SERVER_ERROR' });
     }
 
-    return response.status(200).json({
-      success: true,
-      message: 'Lệnh điều khiển cảm biến môi trường đã được gửi thành công.'
-    });
-  });
-
-  router.get('/events', (request, response) => {
     response.status(200).set({
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-store, no-transform',
@@ -87,9 +81,19 @@ export function createEnvironmentSensorRouter(
       }
     };
 
-    const onChange = (snapshot) => {
+    const onChange = async (snapshot) => {
       if (paused) {
         pendingSnapshot = snapshot;
+        return;
+      }
+      try {
+        const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+        if (!canView) {
+          close();
+          return;
+        }
+      } catch {
+        close();
         return;
       }
       write(`event: state\ndata: ${JSON.stringify(snapshot)}\n\n`);
@@ -114,8 +118,19 @@ export function createEnvironmentSensorRouter(
     write('retry: 3000\n\n');
     onChange(telemetry.getSnapshot());
 
-    heartbeat = setInterval(() => {
+    heartbeat = setInterval(async () => {
       if (closed) return;
+      try {
+        const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+        if (!canView) {
+          write('event: session-expired\ndata: {"code":"REVOKED"}\n\n');
+          close();
+          return;
+        }
+      } catch {
+        close();
+        return;
+      }
       write(': heartbeat\n\n');
     }, heartbeatMs);
     heartbeat.unref();

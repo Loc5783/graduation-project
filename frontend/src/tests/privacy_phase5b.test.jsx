@@ -780,7 +780,7 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
       await renderPrivacyPage({ initialLang: 'vi' });
 
       expect(container.textContent).toContain('Quyền riêng tư và dữ liệu');
-      expect(container.textContent).toContain('Hiện chỉ lưu lựa chọn. Chức năng tự dọn dữ liệu chưa được bật.');
+      expect(container.textContent).toContain('Hệ thống tự dọn thông báo theo số ngày đã chọn.');
       expect(container.textContent).toContain('Chưa khả dụng');
     });
 
@@ -794,7 +794,7 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
       await renderPrivacyPage({ initialLang: 'en' });
 
       expect(container.textContent).toContain('Privacy & Data');
-      expect(container.textContent).toContain('Currently only saves your preference. Automatic data cleanup is not yet enabled.');
+      expect(container.textContent).toContain('Notifications are pruned according to your selected retention period.');
       expect(container.textContent).toContain('Not available yet');
     });
   });

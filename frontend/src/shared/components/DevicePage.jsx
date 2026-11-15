@@ -7,7 +7,7 @@ import { getDeviceIcon } from './AuthIcons.jsx';
  * Cung cấp thông tin nhận diện cơ bản của thiết bị và vị trí chèn OwnerArea
  * để từng thành viên phát triển tính năng độc lập.
  */
-export default function DevicePage({ config, ownerArea, hideHeader = false }) {
+export default function DevicePage({ config, ownerArea, hideHeader = false, hideDescription = false }) {
   const { t } = useLanguage();
 
   if (!config) {
@@ -47,9 +47,11 @@ export default function DevicePage({ config, ownerArea, hideHeader = false }) {
           </div>
         </div>
 
-        <p className="device-description">
-          {t('device_desc_template', { name: displayName, owner: config.owner })}
-        </p>
+        {!hideDescription && (
+          <p className="device-description">
+            {t('device_desc_template', { name: displayName, owner: config.owner })}
+          </p>
+        )}
 
         {/* Thông tin kỹ thuật dạng khối thu gọn theo yêu cầu */}
         <details className="device-tech-details">
