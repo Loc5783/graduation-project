@@ -9,6 +9,9 @@ import { DeviceProvider } from '../context/DeviceContext.jsx';
 import { SettingsProvider } from '../context/SettingsContext.jsx';
 import * as settingsService from '../services/settingsService.js';
 import * as authService from '../services/authService.js';
+import * as privacyDataService from '../services/privacyDataService.js';
+
+vi.mock('react-chartjs-2', () => ({ Line: () => <div data-testid="sharing-chart" /> }));
 
 import PrivacySettings from '../pages/Settings/PrivacySettings.jsx';
 import { isValidPrivacyContract } from '../pages/Settings/usePrivacySettings.js';
@@ -152,6 +155,27 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
       expect(isValidPrivacyContract({})).toBe(false);
       expect(isValidPrivacyContract([])).toBe(false);
     });
+  });
+
+  it('chỉ tải báo cáo và biểu đồ khi chủ thiết bị yêu cầu', async () => {
+    vi.spyOn(settingsService, 'getSettingsService').mockResolvedValue({ success: true, status: 200,
+      data: { privacy: { retentionDays: 30 } } });
+    const reportSpy = vi.spyOn(privacyDataService, 'getPrivacyReport').mockResolvedValue({ success: true,
+      data: { generatedAt: new Date().toISOString(), profile: { name: 'Owner', email: 'owner@example.com', role: 'member', owned: [] },
+        retentionDays: 30, notificationCount: 0, activeSessionCount: 1,
+        devices: [{ id: 'smart-bin', name: 'Thùng rác', collectionEnabled: true, collectedFields: ['fillPercent'], viewerCount: 1 }],
+        sharingTimeline: [{ date: '2026-11-16', count: 2 }],
+        recentAccess: [{ at: new Date().toISOString(), deviceId: 'smart-bin', actor: 'Viewer', action: 'DEVICE_DATA_READ' }] } });
+    await renderPrivacyPage();
+    expect(reportSpy).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="sharing-chart"]')).toBeNull();
+    const open = Array.from(container.querySelectorAll('button')).find(button => button.textContent.includes('Xem báo cáo PDF'));
+    await act(async () => { open.click(); });
+    expect(reportSpy).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Báo cáo minh bạch dữ liệu');
+    expect(container.textContent).toContain('Thùng rác');
+    expect(container.textContent).toContain('Viewer');
+    expect(container.textContent).toContain('fillPercent');
   });
 
   describe('2. Nạp và lưu lựa chọn thật (Load & Save Flow)', () => {
@@ -769,8 +793,8 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
     });
   });
 
-  describe('7. Hiển thị song ngữ và Chú thích chưa dọn dữ liệu', () => {
-    it('7.1. Tiếng Việt: hiển thị tiêu đề và chú thích trung thực chưa dọn dữ liệu', async () => {
+  describe('7. Hiển thị song ngữ và phạm vi lưu giữ', () => {
+    it('7.1. Tiếng Việt: hiển thị phạm vi lưu giữ thực tế và không có mục giả', async () => {
       vi.spyOn(settingsService, 'getSettingsService').mockResolvedValue({
         success: true,
         status: 200,
@@ -780,8 +804,9 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
       await renderPrivacyPage({ initialLang: 'vi' });
 
       expect(container.textContent).toContain('Quyền riêng tư và dữ liệu');
-      expect(container.textContent).toContain('Hệ thống tự dọn thông báo theo số ngày đã chọn.');
-      expect(container.textContent).toContain('Chưa khả dụng');
+      expect(container.textContent).toContain('Lịch sử thiết bị được giữ tối đa 30 ngày');
+      expect(container.textContent).toContain('Tự động xóa thông báo cũ');
+      expect(container.textContent).not.toContain('Chưa khả dụng');
     });
 
     it('7.2. Tiếng Anh: hiển thị song ngữ tương ứng', async () => {
@@ -794,8 +819,9 @@ describe('Phase 5B Frontend Privacy Settings Tests (PrivacySettings & usePrivacy
       await renderPrivacyPage({ initialLang: 'en' });
 
       expect(container.textContent).toContain('Privacy & Data');
-      expect(container.textContent).toContain('Notifications are pruned according to your selected retention period.');
-      expect(container.textContent).toContain('Not available yet');
+      expect(container.textContent).toContain('Device history is kept for up to 30 days');
+      expect(container.textContent).toContain('Automatically delete old notifications');
+      expect(container.textContent).not.toContain('Not available yet');
     });
   });
 

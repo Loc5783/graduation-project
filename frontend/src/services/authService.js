@@ -184,6 +184,22 @@ export async function registerService({ fullName, email, password } = {}, option
   return res;
 }
 
+export function verifyEmailService({ email, code }, options = {}) {
+  return apiRequest('/api/auth/verify-email', {
+    ...options, method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    body: JSON.stringify({ email, code })
+  });
+}
+
+export function resendVerificationService({ email }, options = {}) {
+  return apiRequest('/api/auth/resend-verification', {
+    ...options, method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    body: JSON.stringify({ email })
+  });
+}
+
 /**
  * Gửi yêu cầu đăng nhập tài khoản (POST /api/auth/login)
  * 

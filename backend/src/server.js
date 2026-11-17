@@ -27,9 +27,10 @@ async function startServer() {
     envBridge = createEnvironmentSensorBridge(app.locals.environmentSensorTelemetry);
     envBridge.start();
 
-    // 5. Lắng nghe tại 127.0.0.1:5000
-    const server = app.listen(PORT, '127.0.0.1', () => {
-      console.log(`[Server] Máy chủ backend đang lắng nghe tại http://127.0.0.1:${PORT}`);
+    // 5. Lắng nghe tại 0.0.0.0:5000 để cả localhost, máy ảo lẫn thiết bị di động trong mạng LAN đều kết nối được
+    const HOST = process.env.HOST || '0.0.0.0';
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`[Server] Máy chủ backend đang lắng nghe tại http://${HOST}:${PORT}`);
     });
 
     // Xử lý dừng máy chủ an toàn (Graceful Shutdown)

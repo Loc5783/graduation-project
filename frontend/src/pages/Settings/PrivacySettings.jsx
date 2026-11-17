@@ -1,6 +1,8 @@
 import { useId, useRef } from 'react';
 import { useLanguage, getErrorMessage } from '../../context/LanguageContext.jsx';
 import { usePrivacySettings } from './usePrivacySettings.js';
+import PrivacyDataActions from './PrivacyDataActions.jsx';
+import './PrivacyReport.css';
 
 export default function PrivacySettings({ onHookReady } = {}) {
   const { t } = useLanguage();
@@ -195,116 +197,9 @@ export default function PrivacySettings({ onHookReady } = {}) {
           </div>
         </section>
 
-        {/* Các mục chức năng tương lai: hiển thị trạng thái chưa khả dụng, không có nút thao tác giả */}
-        <section
-          className="settings-section-group"
-          style={{
-            borderTop: '1px solid var(--color-border)',
-            paddingTop: '1.25rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}
-        >
-          {/* Tải dữ liệu của tôi */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              padding: '0.75rem 1rem',
-              backgroundColor: 'var(--color-bg-subtle)',
-              borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.2rem' }}>
-                {t('privacy_future_export_title')}
-              </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                {t('privacy_future_export_desc')}
-              </div>
-            </div>
-            <span
-              className="card-status-badge"
-              style={{
-                padding: '0.2rem 0.5rem',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-                marginLeft: '0.75rem'
-              }}
-            >
-              {t('privacy_future_export_status')}
-            </span>
-          </div>
-
-          {/* Các sự đồng ý đã cấp */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              padding: '0.75rem 1rem',
-              backgroundColor: 'var(--color-bg-subtle)',
-              borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.2rem' }}>
-                {t('privacy_future_consents_title')}
-              </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                {t('privacy_future_consents_desc')}
-              </div>
-            </div>
-            <span
-              className="card-status-badge"
-              style={{
-                padding: '0.2rem 0.5rem',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-                marginLeft: '0.75rem'
-              }}
-            >
-              {t('privacy_future_consents_status')}
-            </span>
-          </div>
-
-          {/* Xóa dữ liệu của tôi */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              padding: '0.75rem 1rem',
-              backgroundColor: 'var(--color-bg-subtle)',
-              borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.2rem' }}>
-                {t('privacy_future_delete_title')}
-              </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                {t('privacy_future_delete_desc')}
-              </div>
-            </div>
-            <span
-              className="card-status-badge"
-              style={{
-                padding: '0.2rem 0.5rem',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-                marginLeft: '0.75rem'
-              }}
-            >
-              {t('privacy_future_delete_status')}
-            </span>
-          </div>
-        </section>
+        {/* Báo cáo và xóa dữ liệu thật của tài khoản */}
+        <PrivacyDataActions kind="export" />
+        <PrivacyDataActions kind="delete" />
       </div>
     </div>
   );

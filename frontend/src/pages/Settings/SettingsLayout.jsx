@@ -17,6 +17,12 @@ export default function SettingsLayout() {
   const isIndex = location.pathname === '/settings' || location.pathname === '/settings/';
   const isAppearanceActive = location.pathname === '/settings/appearance' || (isIndex && isDesktop);
 
+  // Privacy has its own top-level navigation entry; it does not need the
+  // nested Settings menu beside its content.
+  if (location.pathname === '/settings/privacy') {
+    return <div className="settings-container"><section className="settings-content-pane"><Outlet /></section></div>;
+  }
+
   return (
     <div className="settings-container">
       {/* Nút quay lại trên Mobile khi đang ở các trang con */}

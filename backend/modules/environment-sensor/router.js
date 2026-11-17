@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import requireAuth from '../../src/middleware/auth.js';
 import { getDeviceAccess } from '../../src/services/deviceAccess.js';
+import { recordDeviceRead, recordDeniedDeviceRead } from '../../src/services/deviceDataAudit.js';
 
 export function createEnvironmentSensorRouter(
   telemetry,
@@ -11,14 +12,17 @@ export function createEnvironmentSensorRouter(
 
   router.get('/state', async (request, response) => {
     try {
-      const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+      const { canView, device } = await getDeviceAccess(request.user?._id, 'environment-sensor');
       if (!canView) {
+        await recordDeniedDeviceRead({ device, actorId: request.user?._id, source: 'environment-state' });
         return response.status(403).json({
           success: false,
           code: 'FORBIDDEN',
           message: 'Bạn không có quyền xem dữ liệu cảm biến môi trường.'
         });
       }
+      if (device?.collectionEnabled === false) return response.status(200).json({ success: true, data: null, collectionEnabled: false });
+      await recordDeviceRead({ device, actorId: request.user?._id, source: 'environment-state' });
       response.set('Cache-Control', 'no-store');
       return response.json({ success: true, data: telemetry.getSnapshot() });
     } catch (err) {
@@ -28,14 +32,17 @@ export function createEnvironmentSensorRouter(
 
   router.get('/events', async (request, response) => {
     try {
-      const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+      const { canView, device } = await getDeviceAccess(request.user?._id, 'environment-sensor');
       if (!canView) {
+        await recordDeniedDeviceRead({ device, actorId: request.user?._id, source: 'environment-events' });
         return response.status(403).json({
           success: false,
           code: 'FORBIDDEN',
           message: 'Bạn không có quyền xem luồng sự kiện cảm biến môi trường.'
         });
       }
+      if (device?.collectionEnabled === false) return response.status(403).json({ success: false, code: 'COLLECTION_PAUSED' });
+      await recordDeviceRead({ device, actorId: request.user?._id, source: 'environment-events' });
     } catch {
       return response.status(500).json({ success: false, code: 'SERVER_ERROR' });
     }
@@ -87,8 +94,8 @@ export function createEnvironmentSensorRouter(
         return;
       }
       try {
-        const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
-        if (!canView) {
+        const { canView, device } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+        if (!canView || device?.collectionEnabled === false) {
           close();
           return;
         }
@@ -121,8 +128,8 @@ export function createEnvironmentSensorRouter(
     heartbeat = setInterval(async () => {
       if (closed) return;
       try {
-        const { canView } = await getDeviceAccess(request.user?._id, 'environment-sensor');
-        if (!canView) {
+        const { canView, device } = await getDeviceAccess(request.user?._id, 'environment-sensor');
+        if (!canView || device?.collectionEnabled === false) {
           write('event: session-expired\ndata: {"code":"REVOKED"}\n\n');
           close();
           return;

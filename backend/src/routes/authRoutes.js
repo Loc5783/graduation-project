@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, me, logout } from '../controllers/authController.js';
+import { register, login, me, logout, verifyRegistrationEmail, resendRegistrationCode, cancelRegistration } from '../controllers/authController.js';
 import requireAuth from '../middleware/auth.js';
 import verifyOrigin from '../middleware/csrf.js';
 import authRateLimiter from '../middleware/rateLimiter.js';
@@ -16,6 +16,9 @@ export function createAuthRouter(options = {}) {
 
   // Đăng ký tài khoản mới: kiểm tra nguồn, bắt buộc JSON, giới hạn tần suất
   router.post('/register', originMiddleware, jsonMiddleware, limiterMiddleware, register);
+  router.post('/verify-email', originMiddleware, jsonMiddleware, limiterMiddleware, verifyRegistrationEmail);
+  router.post('/resend-verification', originMiddleware, jsonMiddleware, limiterMiddleware, resendRegistrationCode);
+  router.post('/cancel-registration', originMiddleware, jsonMiddleware, limiterMiddleware, cancelRegistration);
 
   // Đăng nhập: kiểm tra nguồn, bắt buộc JSON, giới hạn tần suất
   router.post('/login', originMiddleware, jsonMiddleware, limiterMiddleware, login);

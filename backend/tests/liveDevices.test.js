@@ -16,6 +16,13 @@ describe('Authenticated local gateway device readings', () => {
     const raw = sample(1); raw['environment-sensor'].brokerConnected = false;
     expect(normalizeLiveDevices(raw).find(d => d.id === 'environment-sensor')).toMatchObject({ fresh: false, data: { gasRaw: 326 } });
   });
+  it('passes door fingerprint health and count but never exports fingerprint templates', () => {
+    const raw = { 'smart-door-lock': { brokerConnected: true, fresh: true, telemetryAgeSeconds: 1,
+      telemetry: { data: { fingerprintOnline: true, fingerprintBusy: false, fingerprintCount: 2,
+        fingerprintTemplate: 'private', fingerprintImage: 'private' } } } };
+    const door = normalizeLiveDevices(raw).find(d => d.id === 'smart-door-lock');
+    expect(door.data).toEqual({ fingerprintOnline: true, fingerprintBusy: false, fingerprintCount: 2 });
+  });
   it('rejects invalid gateway envelope', () => {
     expect(() => normalizeLiveDevices([])).toThrow();
   });

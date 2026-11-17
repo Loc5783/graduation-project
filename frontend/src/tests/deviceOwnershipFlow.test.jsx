@@ -3,8 +3,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { LanguageProvider } from '../context/LanguageContext.jsx';
-import { AuthProvider } from '../context/AuthContext.jsx';
-import { MyDevicesProvider } from '../context/MyDevicesContext.jsx';
+import { AuthProvider, AuthContext } from '../context/AuthContext.jsx';
+import { MyDevicesProvider, useMyDevices, MyDevicesContext } from '../context/MyDevicesContext.jsx';
 import Overview from '../pages/Overview.jsx';
 import Layout from '../shared/components/Layout.jsx';
 import { DeviceProvider } from '../context/DeviceContext.jsx';
@@ -562,8 +562,9 @@ describe('Frontend Device Ownership, Pairing and Sharing Flow (Phase 2 & 3)', ()
 
     const sectionTitle = container.querySelector('.nav-section-title');
     expect(sectionTitle).not.toBeNull();
-    // Tài khoản chỉ có 1 thiết bị -> Hiển thị "Thiết bị thông minh (1)", không được ghi (5)
-    expect(sectionTitle.textContent.trim()).toBe('Thiết bị thông minh (1)');
+    expect(sectionTitle.textContent.trim()).toBe('Thiết bị của tôi (1)');
+    expect(container.querySelector('.nav-section-shared').textContent.trim()).toBe('Được chia sẻ · Chỉ xem (0)');
+    expect(container.querySelector('a[href="/activity"]')?.textContent).toContain('Nhật ký & phiên hoạt động');
   });
 
   it('12. DeviceShareManager: Đổi tên gợi nhớ thiết bị thành công và cập nhật phản hồi', async () => {
@@ -703,5 +704,654 @@ describe('Frontend Device Ownership, Pairing and Sharing Flow (Phase 2 & 3)', ()
     expect(container.querySelector('.device-name-form')).toBeNull();
     expect(container.querySelector('.btn-unclaim-trigger')).toBeNull();
     expect(container.querySelector('.device-owner-share-section')).toBeNull();
+  });
+
+  it('15. DeviceShareManager: Xử lý lỗi 401 kích hoạt đăng xuất đúng user', async () => {
+    vi.spyOn(authService, 'getMeService').mockResolvedValue({
+      success: true,
+      data: { user: { id: 'owner_user_401', name: 'Owner User', email: 'owner401@example.com', role: 'member', owned: [] } }
+    });
+    vi.spyOn(myDeviceService, 'getMyDevices').mockResolvedValue({
+      success: true,
+      data: { devices: [{ id: 'smart-bin', code: 'TRTM01', access: 'owner' }] }
+    });
+    vi.spyOn(myDeviceService, 'getDeviceShares').mockResolvedValue({
+      success: false,
+      status: 401,
+      message: 'Unauthorized'
+    });
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <LanguageProvider>
+            <AuthProvider>
+              <MyDevicesProvider>
+                <DeviceShareManager deviceId="smart-bin" isOwner={true} />
+              </MyDevicesProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </MemoryRouter>
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Khi phiên hết hạn 401, session storage được dọn
+    expect(window.sessionStorage.getItem('shp_auth_session')).toBeNull();
+  });
+
+  it('16. DeviceGuard: Viewer bị thu hồi khi đứng yên trên trang sẽ mất dữ liệu cũ và unmount module con', async () => {
+    vi.spyOn(authService, 'getMeService').mockResolvedValue({
+      success: true,
+      data: { user: { id: 'viewer_standing', name: 'Viewer User', email: 'viewer@example.com', role: 'viewer', owned: [] } }
+    });
+    // Ban đầu tài khoản có quyền viewer
+    const getDevicesSpy = vi.spyOn(myDeviceService, 'getMyDevices').mockResolvedValueOnce({
+      success: true,
+      data: { devices: [{ id: 'smart-bin', code: 'TRTM01', access: 'viewer' }] }
+    }).mockResolvedValueOnce({
+      // Lần 2: sau khi chủ sở hữu thu hồi quyền, danh sách thiết bị không còn smart-bin
+      success: true,
+      data: { devices: [] }
+    });
+
+    // Mock getDeviceDetails trả về 403 Forbidden khi bị chủ sở hữu thu hồi
+    const getDetailsSpy = vi.spyOn(myDeviceService, 'getDeviceDetails').mockResolvedValue({
+      success: false,
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'Không có quyền truy cập.'
+    });
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <LanguageProvider>
+            <AuthProvider>
+              <MyDevicesProvider>
+                <DeviceGuard deviceId="smart-bin">
+                  <div className="confidential-bin-data">DỮ LIỆU CẢM BIẾN THỜI GIAN THỰC</div>
+                </DeviceGuard>
+              </MyDevicesProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </MemoryRouter>
+      );
+    });
+
+    // Đợi polling / kiểm tra quyền hoàn tất
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // getDeviceDetails đã được gọi để kiểm tra tính hợp lệ của quyền viewer
+    expect(getDetailsSpy).toHaveBeenCalledWith('smart-bin', expect.anything());
+    // Khi nhận 403, refreshDevices được kích hoạt
+    expect(getDevicesSpy).toHaveBeenCalledTimes(2);
+
+    // Module con chứa dữ liệu cũ phải bị unmount hoàn toàn
+    expect(container.querySelector('.confidential-bin-data')).toBeNull();
+    // Thay vào đó hiển thị màn hình từ chối truy cập
+    expect(container.querySelector('.device-guard-unauthorized')).not.toBeNull();
+    expect(container.textContent).toContain('Thiết bị chưa được kết nối');
+  });
+
+  it('17. DeviceGuard: Sử dụng Fake Timers đếm chính xác số lần GET trong 30 giây, không bị vòng lặp vô tận', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(authService, 'getMeService').mockResolvedValue({
+        success: true,
+        data: { user: { id: 'viewer_timer', name: 'Viewer Timer', email: 'vtimer@example.com', role: 'viewer', owned: [] } }
+      });
+      vi.spyOn(myDeviceService, 'getMyDevices').mockResolvedValue({
+        success: true,
+        data: { devices: [{ id: 'smart-bin', code: 'TRTM01', access: 'viewer' }] }
+      });
+      const getDetailsSpy = vi.spyOn(myDeviceService, 'getDeviceDetails').mockResolvedValue({
+        success: true,
+        data: { device: { id: 'smart-bin', access: 'viewer' } }
+      });
+
+      await act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthProvider>
+                <MyDevicesProvider>
+                  <DeviceGuard deviceId="smart-bin">
+                    <div className="telemetry-ok">Dữ liệu hợp lệ</div>
+                  </DeviceGuard>
+                </MyDevicesProvider>
+              </AuthProvider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+
+      // Tại thời điểm mount (t = 0s): gọi đúng 1 lần
+      expect(getDetailsSpy).toHaveBeenCalledTimes(1);
+
+      // Tiến tới 10 giây: gọi lần 2
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(getDetailsSpy).toHaveBeenCalledTimes(2);
+
+      // Tiến tới 20 giây: gọi lần 3
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(getDetailsSpy).toHaveBeenCalledTimes(3);
+
+      // Tiến tới 30 giây: gọi lần 4
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(getDetailsSpy).toHaveBeenCalledTimes(4);
+
+      // Đảm bảo dữ liệu vẫn hiển thị ổn định
+      expect(container.textContent).toContain('Dữ liệu hợp lệ');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('18. DeviceGuard: Xử lý Network Error không lặp vô tận và dọn dẹp timer khi unmount', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(authService, 'getMeService').mockResolvedValue({
+        success: true,
+        data: { user: { id: 'viewer_net', name: 'Viewer Net', email: 'vnet@example.com', role: 'viewer', owned: [] } }
+      });
+      vi.spyOn(myDeviceService, 'getMyDevices').mockResolvedValue({
+        success: true,
+        data: { devices: [{ id: 'smart-bin', code: 'TRTM01', access: 'viewer' }] }
+      });
+      // Giả lập lỗi mạng
+      const getDetailsSpy = vi.spyOn(myDeviceService, 'getDeviceDetails').mockRejectedValue(new Error('Network Offline'));
+
+      await act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthProvider>
+                <MyDevicesProvider>
+                  <DeviceGuard deviceId="smart-bin">
+                    <div className="telemetry-content">Dữ liệu cảm biến</div>
+                  </DeviceGuard>
+                </MyDevicesProvider>
+              </AuthProvider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+
+      // Mount: gọi 1 lần
+      expect(getDetailsSpy).toHaveBeenCalledTimes(1);
+
+      // 10s sau khi mạng mất: gọi lần 2 và catch an toàn, không crash
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(getDetailsSpy).toHaveBeenCalledTimes(2);
+
+      // Unmount component
+      await act(async () => {
+        root.unmount();
+      });
+
+      // Tiến thêm 20 giây: không được gọi thêm lần nào nữa do đã dọn dẹp interval
+      await act(async () => {
+        vi.advanceTimersByTime(20000);
+      });
+      expect(getDetailsSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('19. DeviceShareManager: Stale response 401 của User A không làm logout nhầm User B', async () => {
+    let resolveShareRequestA;
+    const deferredPromiseA = new Promise((resolve) => {
+      resolveShareRequestA = resolve;
+    });
+
+    const mockHandleUnauthorized = vi.fn();
+    // Lần 1 (User A) bị hoãn; Lần 2 (User B) thành công bình thường
+    const shareSpy = vi.spyOn(myDeviceService, 'getDeviceShares')
+      .mockReturnValueOnce(deferredPromiseA)
+      .mockResolvedValueOnce({ success: true, data: { users: [] } });
+
+    const renderWithUser = (user) => {
+      return act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthContext.Provider value={{ currentUser: user, handleUnauthorized: mockHandleUnauthorized }}>
+                <MyDevicesProvider>
+                  <DeviceShareManager deviceId="smart-bin" isOwner={true} />
+                </MyDevicesProvider>
+              </AuthContext.Provider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+    };
+
+    // 1. User A gửi request nạp danh sách chia sẻ
+    await renderWithUser({ id: 'user_A', name: 'User A', email: 'userA@example.com' });
+    expect(shareSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Trước khi request của User A có kết quả, User A đăng xuất và User B đăng nhập
+    await renderWithUser({ id: 'user_B', name: 'User B', email: 'userB@example.com' });
+    expect(shareSpy).toHaveBeenCalledTimes(2);
+
+    // 3. Bây giờ request cũ của User A mới trả về lỗi 401 Unauthorized
+    await act(async () => {
+      resolveShareRequestA({
+        success: false,
+        status: 401,
+        message: 'Token expired'
+      });
+    });
+
+    // Stale response của User A tuyệt đối không được kích hoạt logout User B!
+    expect(mockHandleUnauthorized).not.toHaveBeenCalledWith('user_B');
+    expect(mockHandleUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('20. MyDevicesContext: Đổi tài khoản khi GET của A đang pending -> B GET gửi ngay và thiết bị B hiển thị trước khi A hoàn tất; A 401/reject/resolve không tác động B', async () => {
+    let resolveGetA;
+    const deferredPromiseA = new Promise((resolve) => {
+      resolveGetA = resolve;
+    });
+
+    const mockHandleUnauthorized = vi.fn();
+    // Lần 1 (User A) bị treo chờ (deferredPromiseA); Lần 2 (User B) trả về ngay danh sách thiết bị của B
+    const getDevicesSpy = vi.spyOn(myDeviceService, 'getMyDevices')
+      .mockReturnValueOnce(deferredPromiseA)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          devices: [
+            { id: 'device-b-1', code: 'DEV_B1', access: 'owner' }
+          ]
+        }
+      });
+
+    // Helper component tiêu thụ context để kiểm chứng state hiển thị
+    function DevicesConsumer() {
+      const { devices, loading, error } = useMyDevices();
+      return (
+        <div data-testid="consumer">
+          {loading && <span data-testid="loading-indicator">Đang tải...</span>}
+          {error && <span data-testid="error-message">{error}</span>}
+          <ul data-testid="device-list">
+            {devices.map(d => (
+              <li key={d.id}>{d.id} - {d.access}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    const renderWithUser = (user) => {
+      return act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthContext.Provider value={{ currentUser: user, handleUnauthorized: mockHandleUnauthorized }}>
+                <MyDevicesProvider>
+                  <DevicesConsumer />
+                </MyDevicesProvider>
+              </AuthContext.Provider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+    };
+
+    // 1. User A đăng nhập: kích hoạt GET lần 1 (đang pending)
+    await renderWithUser({ id: 'user_A', name: 'User A', email: 'userA@example.com' });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Trước khi A trả về, chuyển sang User B: B GET phải được gửi ngay, không bị inFlight của A chặn
+    await renderWithUser({ id: 'user_B', name: 'User B', email: 'userB@example.com' });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(2);
+
+    // B resolve ngay: thiết bị của B được hiển thị trên giao diện trước khi A hoàn tất
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('device-b-1 - owner');
+    expect(container.querySelector('[data-testid="loading-indicator"]')).toBeNull();
+
+    // 3. Bây giờ request cũ của A trả về 401 Unauthorized
+    await act(async () => {
+      resolveGetA({
+        success: false,
+        status: 401,
+        message: 'A session expired'
+      });
+    });
+
+    // Phản hồi 401 của A tuyệt đối không được logout User B
+    expect(mockHandleUnauthorized).not.toHaveBeenCalled();
+    // Thiết bị của B vẫn hiển thị nguyên vẹn
+    expect(container.textContent).toContain('device-b-1 - owner');
+    // Không bị set lỗi nhầm
+    expect(container.querySelector('[data-testid="error-message"]')).toBeNull();
+  });
+
+  it('21. DeviceGuard: Đổi tài khoản A sang B trên cùng deviceId khi request A đang pending -> Quyền lấy theo B, không kẹt tải và response cũ của A không tác động', async () => {
+    let resolveDetailsA;
+    const deferredDetailsA = new Promise((resolve) => {
+      resolveDetailsA = resolve;
+    });
+
+    const mockHandleUnauthorized = vi.fn();
+    // Lần 1 (A là viewer trên smart-bin) bị hoãn; Lần 2 (B) không bị chặn
+    const detailsSpy = vi.spyOn(myDeviceService, 'getDeviceDetails')
+      .mockReturnValueOnce(deferredDetailsA);
+
+    const renderGuardWithUser = (user, userDevices) => {
+      return act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthContext.Provider value={{ currentUser: user, handleUnauthorized: mockHandleUnauthorized }}>
+                <MyDevicesContext.Provider value={{
+                  devices: userDevices,
+                  loading: false,
+                  isProvided: true,
+                  getDeviceAccess: (id) => userDevices.find(d => d.id === id)?.access || null,
+                  refreshDevices: vi.fn()
+                }}>
+                  <DeviceGuard deviceId="smart-bin">
+                    <div className="protected-content">Nội dung an toàn của B</div>
+                  </DeviceGuard>
+                </MyDevicesContext.Provider>
+              </AuthContext.Provider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+    };
+
+    // 1. User A là viewer trên smart-bin: bắt đầu checkViewerAccess và GET bị hoãn
+    await renderGuardWithUser(
+      { id: 'user_A', name: 'User A', email: 'userA@example.com' },
+      [{ id: 'smart-bin', access: 'viewer' }]
+    );
+    expect(detailsSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Chuyển sang User B: User B là owner trên smart-bin
+    await renderGuardWithUser(
+      { id: 'user_B', name: 'User B', email: 'userB@example.com' },
+      [{ id: 'smart-bin', access: 'owner' }]
+    );
+
+    // B là owner: Quyền lấy theo B ngay lập tức, không kẹt tải, hiển thị nội dung
+    expect(container.textContent).toContain('Nội dung an toàn của B');
+    expect(container.querySelector('.device-guard-unauthorized')).toBeNull();
+
+    // 3. Request A kết thúc với 403 Forbidden (thu hồi quyền)
+    await act(async () => {
+      resolveDetailsA({
+        success: false,
+        status: 403,
+        code: 'FORBIDDEN',
+        message: 'A viewer revoked'
+      });
+    });
+
+    // Quyền của B vẫn được bảo toàn nguyên vẹn, không bị A 403 làm thu hồi
+    expect(container.textContent).toContain('Nội dung an toàn của B');
+    expect(container.querySelector('.device-guard-unauthorized')).toBeNull();
+    expect(mockHandleUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('22. MyDevicesContext: Race A1 pending -> B -> A2 pending -> A1 401: Không giải phóng khóa A2, không gửi A3 khi trigger refresh, A2 hoàn tất đúng', async () => {
+    let resolveGetA1;
+    const deferredPromiseA1 = new Promise((resolve) => {
+      resolveGetA1 = resolve;
+    });
+
+    let resolveGetA2;
+    const deferredPromiseA2 = new Promise((resolve) => {
+      resolveGetA2 = resolve;
+    });
+
+    const mockHandleUnauthorized = vi.fn();
+    // Lần 1: A1 (hoãn)
+    // Lần 2: B (xong ngay)
+    // Lần 3: A2 (hoãn)
+    // Lần 4: Refresh sau khi A2 xong (xong ngay)
+    const getDevicesSpy = vi.spyOn(myDeviceService, 'getMyDevices')
+      .mockReturnValueOnce(deferredPromiseA1)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { devices: [{ id: 'device-b', code: 'DEV_B', access: 'owner' }] }
+      })
+      .mockReturnValueOnce(deferredPromiseA2)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { devices: [{ id: 'device-a-post', code: 'DEV_A_POST', access: 'owner' }] }
+      });
+
+    let refreshDevicesFn = null;
+    function DevicesConsumer() {
+      const ctx = useMyDevices();
+      refreshDevicesFn = ctx.refreshDevices;
+      return (
+        <div data-testid="consumer">
+          {ctx.loading && <span data-testid="loading-indicator">Đang tải...</span>}
+          {ctx.error && <span data-testid="error-message">{ctx.error}</span>}
+          <ul data-testid="device-list">
+            {ctx.devices.map(d => (
+              <li key={d.id}>{d.id}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    const renderWithUser = (user) => {
+      return act(async () => {
+        root.render(
+          <MemoryRouter>
+            <LanguageProvider>
+              <AuthContext.Provider value={{ currentUser: user, handleUnauthorized: mockHandleUnauthorized }}>
+                <MyDevicesProvider>
+                  <DevicesConsumer />
+                </MyDevicesProvider>
+              </AuthContext.Provider>
+            </LanguageProvider>
+          </MemoryRouter>
+        );
+      });
+    };
+
+    // 1. User A đăng nhập lần đầu: A1 pending
+    await renderWithUser({ id: 'user_A', name: 'User A', email: 'userA@example.com' });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Chuyển sang User B: B resolve ngay
+    await renderWithUser({ id: 'user_B', name: 'User B', email: 'userB@example.com' });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('device-b');
+
+    // 3. Chuyển trở lại User A: A2 pending
+    await renderWithUser({ id: 'user_A', name: 'User A', email: 'userA@example.com' });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(3);
+
+    // 4. Request cũ A1 trả về 401 Unauthorized
+    await act(async () => {
+      resolveGetA1({
+        success: false,
+        status: 401,
+        message: 'A1 token expired'
+      });
+    });
+
+    // A1 không được logout phiên A2
+    expect(mockHandleUnauthorized).not.toHaveBeenCalled();
+
+    // 5. Thử trigger refresh trong lúc A2 đang pending:
+    // Khóa in-flight của A2 phải được bảo vệ, KHÔNG gửi request A3 chồng chéo
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      if (refreshDevicesFn) {
+        void refreshDevicesFn();
+      }
+    });
+
+    // Số lần gọi getMyDevices vẫn giữ nguyên là 3, tuyệt đối không có A3
+    expect(getDevicesSpy).toHaveBeenCalledTimes(3);
+
+    // 6. Bây giờ request A2 hoàn tất thành công
+    await act(async () => {
+      resolveGetA2({
+        success: true,
+        data: { devices: [{ id: 'device-a-final', code: 'DEV_A2', access: 'owner' }] }
+      });
+    });
+
+    // Dữ liệu của A2 được hiển thị chính xác
+    expect(container.textContent).toContain('device-a-final');
+    expect(container.querySelector('[data-testid="loading-indicator"]')).toBeNull();
+    expect(mockHandleUnauthorized).not.toHaveBeenCalled();
+
+    // 7. Sau khi A2 đã xong, trigger refresh lần nữa sẽ được phép gửi (lần 4)
+    await act(async () => {
+      if (refreshDevicesFn) {
+        void refreshDevicesFn();
+      }
+    });
+    expect(getDevicesSpy).toHaveBeenCalledTimes(4);
+  });
+
+  it('23. DeviceGuard: Race A1 pending -> B -> A2 pending -> A1 403: Không giải phóng khóa A2, tick poll 10s không gửi A3, quyền A2 giữ nguyên', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveDetailsA1;
+      const deferredDetailsA1 = new Promise((resolve) => {
+        resolveDetailsA1 = resolve;
+      });
+
+      let resolveDetailsA2;
+      const deferredDetailsA2 = new Promise((resolve) => {
+        resolveDetailsA2 = resolve;
+      });
+
+      const mockHandleUnauthorized = vi.fn();
+      // Lần 1: A1 (hoãn)
+      // Lần 2: B (xong ngay)
+      // Lần 3: A2 (hoãn)
+      // Lần 4: Tick poll sau khi A2 xong (xong ngay)
+      const detailsSpy = vi.spyOn(myDeviceService, 'getDeviceDetails')
+        .mockReturnValueOnce(deferredDetailsA1)
+        .mockResolvedValueOnce({
+          success: true,
+          data: { device: { id: 'smart-bin', access: 'viewer' } }
+        })
+        .mockReturnValueOnce(deferredDetailsA2)
+        .mockResolvedValueOnce({
+          success: true,
+          data: { device: { id: 'smart-bin', access: 'viewer' } }
+        });
+
+      const renderGuardWithUser = (user, userDevices) => {
+        return act(async () => {
+          root.render(
+            <MemoryRouter>
+              <LanguageProvider>
+                <AuthContext.Provider value={{ currentUser: user, handleUnauthorized: mockHandleUnauthorized }}>
+                  <MyDevicesContext.Provider value={{
+                    devices: userDevices,
+                    loading: false,
+                    isProvided: true,
+                    getDeviceAccess: (id) => userDevices.find(d => d.id === id)?.access || null,
+                    refreshDevices: vi.fn()
+                  }}>
+                    <DeviceGuard deviceId="smart-bin">
+                      <div className="protected-content">Nội dung an toàn của viewer</div>
+                    </DeviceGuard>
+                  </MyDevicesContext.Provider>
+                </AuthContext.Provider>
+              </LanguageProvider>
+            </MemoryRouter>
+          );
+        });
+      };
+
+      // 1. User A (viewer) mount: A1 pending
+      await renderGuardWithUser(
+        { id: 'user_A', name: 'User A', email: 'userA@example.com' },
+        [{ id: 'smart-bin', access: 'viewer' }]
+      );
+      expect(detailsSpy).toHaveBeenCalledTimes(1);
+
+      // 2. Chuyển sang User B (viewer): B resolve ngay
+      await renderGuardWithUser(
+        { id: 'user_B', name: 'User B', email: 'userB@example.com' },
+        [{ id: 'smart-bin', access: 'viewer' }]
+      );
+      expect(detailsSpy).toHaveBeenCalledTimes(2);
+
+      // 3. Chuyển trở lại User A (viewer): A2 pending
+      await renderGuardWithUser(
+        { id: 'user_A', name: 'User A', email: 'userA@example.com' },
+        [{ id: 'smart-bin', access: 'viewer' }]
+      );
+      expect(detailsSpy).toHaveBeenCalledTimes(3);
+
+      // 4. Request cũ A1 trả về 403 Forbidden (thu hồi)
+      await act(async () => {
+        resolveDetailsA1({
+          success: false,
+          status: 403,
+          code: 'FORBIDDEN',
+          message: 'A1 revoked'
+        });
+      });
+
+      // A1 không được revoke quyền của A2, màn hình unauthorized không hiện
+      expect(container.querySelector('.device-guard-unauthorized')).toBeNull();
+
+      // 5. Tick poll 10s trong lúc A2 đang pending:
+      // Khóa của A2 được bảo vệ, KHÔNG gửi request A3 chồng chéo
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+
+      // Vẫn giữ nguyên 3 lần gọi, không có A3
+      expect(detailsSpy).toHaveBeenCalledTimes(3);
+
+      // 6. Request A2 hoàn tất thành công
+      await act(async () => {
+        resolveDetailsA2({
+          success: true,
+          data: { device: { id: 'smart-bin', access: 'viewer' } }
+        });
+      });
+
+      // Quyền và nội dung của A2 được bảo toàn
+      expect(container.textContent).toContain('Nội dung an toàn của viewer');
+      expect(container.querySelector('.device-guard-unauthorized')).toBeNull();
+
+      // 7. Sau khi A2 đã hoàn tất, tick poll 10s tiếp theo sẽ gửi request lần 4 bình thường
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(detailsSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

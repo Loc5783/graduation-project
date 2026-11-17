@@ -166,6 +166,12 @@ export const dictionary = {
     // Register Success
     register_success_title: 'Tạo tài khoản thành công',
     register_success_desc: 'Bạn có thể đăng nhập ngay.',
+    verify_email_title: 'Xác minh email',
+    verify_email_sent: 'Mã 6 số đã gửi đến',
+    verify_email_code: 'Mã xác minh',
+    verify_email_submit: 'Xác minh',
+    verify_email_resend: 'Gửi lại mã',
+    verify_email_existing: 'Tôi đã có mã xác minh',
     btn_go_to_login: 'Đến trang đăng nhập',
 
     // Validation & Error Messages
@@ -518,13 +524,13 @@ export const dictionary = {
 
     // Privacy Settings (Phase 5B)
     privacy_title: 'Quyền riêng tư và dữ liệu',
-    privacy_subtitle: 'Quản lý thời gian lưu giữ dữ liệu và các tùy chọn quyền riêng tư.',
+    privacy_subtitle: 'Lưu thông báo, xem và tải báo cáo dữ liệu của bạn.',
     privacy_retention_card_title: 'Thời gian lưu giữ',
-    privacy_retention_card_desc: 'Tự động dọn dẹp các mục lưu trữ sau khoảng thời gian đã chọn.',
+    privacy_retention_card_desc: 'Tự động xóa thông báo cũ sau khoảng thời gian đã chọn.',
     privacy_retention_7d: '7 ngày',
     privacy_retention_30d: '30 ngày (Khuyến nghị)',
     privacy_retention_90d: '90 ngày',
-    privacy_retention_disclaimer: 'Hiện chỉ lưu lựa chọn. Hệ thống tự dọn thông báo theo số ngày đã chọn.',
+    privacy_retention_disclaimer: 'Thời gian này áp dụng cho thông báo đã lưu. Lịch sử thiết bị được giữ tối đa 30 ngày; nhật ký bảo mật có chính sách riêng.',
     privacy_status_loading: 'Đang tải cài đặt...',
     privacy_status_saving: 'Đang lưu...',
     privacy_status_saved: 'Đã lưu',
@@ -613,6 +619,12 @@ export const dictionary = {
     // Register Success
     register_success_title: 'Account created successfully',
     register_success_desc: 'You can sign in right away.',
+    verify_email_title: 'Verify your email',
+    verify_email_sent: 'A 6-digit code was sent to',
+    verify_email_code: 'Verification code',
+    verify_email_submit: 'Verify',
+    verify_email_resend: 'Resend code',
+    verify_email_existing: 'I already have a code',
     btn_go_to_login: 'Go to sign in',
 
     // Validation & Error Messages
@@ -965,13 +977,13 @@ export const dictionary = {
 
     // Privacy Settings (Phase 5B)
     privacy_title: 'Privacy & Data',
-    privacy_subtitle: 'Manage data retention period and privacy preferences.',
+    privacy_subtitle: 'Keep notifications and review or download your data report.',
     privacy_retention_card_title: 'Data Retention Period',
-    privacy_retention_card_desc: 'Automatically clean stored items after the selected duration.',
+    privacy_retention_card_desc: 'Automatically delete old notifications after the selected duration.',
     privacy_retention_7d: '7 days',
     privacy_retention_30d: '30 days (Recommended)',
     privacy_retention_90d: '90 days',
-    privacy_retention_disclaimer: 'Currently only saves your preference. Notifications are pruned according to your selected retention period.',
+    privacy_retention_disclaimer: 'This period applies to stored notifications. Device history is kept for up to 30 days; security logs follow a separate policy.',
     privacy_status_loading: 'Loading settings...',
     privacy_status_saving: 'Saving...',
     privacy_status_saved: 'Saved',

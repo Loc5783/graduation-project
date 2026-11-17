@@ -8,6 +8,10 @@ import requireJsonContentType from '../middleware/validateContentType.js';
 import { createAuthRateLimiter } from '../middleware/rateLimiter.js';
 import { verifyPairingSecret } from '../services/pairingSecret.js';
 import { hasDeviceControl, hasDeviceView } from '../services/deviceAccess.js';
+import ActivityLog from '../models/ActivityLog.js';
+import { recordActivity, publicActivity } from '../services/activityLog.js';
+import { DEVICE_DATA_FIELDS } from '../constants/deviceDataCatalog.js';
+import { recordDeniedDeviceRead } from '../services/deviceDataAudit.js';
 
 const claimLimiter = createAuthRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const cleanEmail = (value) => typeof value === 'string' && value.length <= 255 ? value.trim().toLowerCase() : null;
@@ -17,7 +21,9 @@ const publicDevice = (doc, userId) => ({
   access: hasDeviceControl(doc, userId) ? 'owner' : 'viewer',
   customName: doc.customName || null,
   claimedAt: doc.claimedAt || null,
-  ownershipEpoch: doc.ownershipEpoch || 0
+  ownershipEpoch: doc.ownershipEpoch || 0,
+  collectionEnabled: doc.collectionEnabled !== false,
+  collectedFields: DEVICE_DATA_FIELDS[doc.deviceId] || []
 });
 
 export function createMyDeviceRouter({ auth = requireAuth, limiter = claimLimiter } = {}) {
@@ -55,7 +61,8 @@ export function createMyDeviceRouter({ auth = requireAuth, limiter = claimLimite
             claimedAt: new Date(),
             ownershipEpoch: nextEpoch,
             viewerUserIds: [],
-            customName: null
+            customName: null,
+            collectionEnabled: true
           }
         },
         { returnDocument: 'after' }
@@ -68,7 +75,43 @@ export function createMyDeviceRouter({ auth = requireAuth, limiter = claimLimite
   router.get('/:deviceId', async (req, res, next) => {
     try {
       const doc = await RegisteredDevice.findOne({ deviceId: req.params.deviceId });
-      if (!hasDeviceView(doc, req.user._id)) return res.status(404).json({ success: false, code: 'DEVICE_NOT_FOUND' });
+      if (!hasDeviceView(doc, req.user._id)) {
+        await recordDeniedDeviceRead({ device: doc, actorId: req.user._id, source: 'device-page' });
+        return res.status(404).json({ success: false, code: 'DEVICE_NOT_FOUND' });
+      }
+      if (!hasDeviceControl(doc, req.user._id)) await recordActivity({ action: 'SHARED_DEVICE_VIEW', actorId: req.user._id,
+        ownerId: doc.ownerUserId, deviceId: doc.deviceId, ownershipEpoch: doc.ownershipEpoch,
+        viewBucket: `${doc.deviceId}:${doc.ownershipEpoch}:${req.user._id}:${Math.floor(Date.now() / 60000)}` });
+      res.set('Cache-Control', 'no-store, private');
+      return res.json({ success: true, data: publicDevice(doc, req.user._id) });
+    } catch (error) { return next(error); }
+  });
+
+  router.get('/:deviceId/activity', async (req, res, next) => {
+    try {
+      const doc = await RegisteredDevice.findOne({ deviceId: req.params.deviceId });
+      if (!hasDeviceControl(doc, req.user._id)) return res.status(404).json({ success: false, code: 'DEVICE_NOT_FOUND' });
+      const rows = await ActivityLog.find({ ownerId: req.user._id, deviceId: doc.deviceId,
+        ownershipEpoch: doc.ownershipEpoch }).sort({ createdAt: -1, _id: -1 }).limit(50)
+        .populate('actorId', 'name email').populate('subjectId', 'name email').lean();
+      res.set('Cache-Control', 'no-store, private');
+      return res.json({ success: true, data: { items: rows.map(publicActivity) } });
+    } catch (error) { return next(error); }
+  });
+
+  router.patch('/:deviceId/collection', verifyOrigin, requireJsonContentType, async (req, res, next) => {
+    try {
+      if (!req.body || Object.keys(req.body).length !== 1 || typeof req.body.enabled !== 'boolean') {
+        return res.status(400).json({ success: false, code: 'INVALID_COLLECTION_SETTING' });
+      }
+      const doc = await RegisteredDevice.findOneAndUpdate(
+        { deviceId: req.params.deviceId, ownerUserId: req.user._id },
+        { $set: { collectionEnabled: req.body.enabled } }, { returnDocument: 'after' }
+      );
+      if (!doc) return res.status(403).json({ success: false, code: 'FORBIDDEN' });
+      await recordActivity({ action: 'DEVICE_COLLECTION_CHANGED', actorId: req.user._id,
+        ownerId: req.user._id, deviceId: doc.deviceId, ownershipEpoch: doc.ownershipEpoch,
+        detail: req.body.enabled ? 'enabled' : 'disabled' });
       res.set('Cache-Control', 'no-store, private');
       return res.json({ success: true, data: publicDevice(doc, req.user._id) });
     } catch (error) { return next(error); }
@@ -98,6 +141,8 @@ export function createMyDeviceRouter({ auth = requireAuth, limiter = claimLimite
         { $addToSet: { viewerUserIds: recipient._id } }, { returnDocument: 'after' }
       );
       if (!doc) return res.status(404).json({ success: false, code: 'DEVICE_NOT_FOUND' });
+      await recordActivity({ action: 'DEVICE_SHARED', actorId: req.user._id, ownerId: req.user._id,
+        subjectId: recipient._id, deviceId: doc.deviceId, ownershipEpoch: doc.ownershipEpoch });
       return res.json({ success: true, data: { user: { id: String(recipient._id), name: recipient.name, email: recipient.email } } });
     } catch (error) { return next(error); }
   });
@@ -110,6 +155,8 @@ export function createMyDeviceRouter({ auth = requireAuth, limiter = claimLimite
         { $pull: { viewerUserIds: new mongoose.Types.ObjectId(req.params.userId) } }, { returnDocument: 'after' }
       );
       if (!doc) return res.status(404).json({ success: false, code: 'DEVICE_NOT_FOUND' });
+      await recordActivity({ action: 'DEVICE_SHARE_REVOKED', actorId: req.user._id, ownerId: req.user._id,
+        subjectId: req.params.userId, deviceId: doc.deviceId, ownershipEpoch: doc.ownershipEpoch });
       return res.json({ success: true, data: { removed: true } });
     } catch (error) { return next(error); }
   });

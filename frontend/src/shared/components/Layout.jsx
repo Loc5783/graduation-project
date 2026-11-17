@@ -1,4 +1,3 @@
-import { useLiveDevices } from '../../context/LiveDeviceContext.jsx';
 import { useMyDevices } from '../../context/MyDevicesContext.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
@@ -7,7 +6,6 @@ import { useDeviceContext } from '../../context/DeviceContext.jsx';
 import { useLanguage, getDeviceDisplayName, getErrorMessage } from '../../context/LanguageContext.jsx';
 import { deviceRegistry } from '../../modules/registry.js';
 import { isPreviewMode } from '../../services/authService.js';
-import HubStatusIndicator from './HubStatusIndicator.jsx';
 import LanguageToggle from './LanguageToggle.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import {
@@ -20,7 +18,6 @@ import {
 } from './AuthIcons.jsx';
 
 export default function Layout() {
-  const liveDevices = useLiveDevices();
   const myDevices = useMyDevices();
 
   const { currentUser, logout, storageNotice: authStorageNotice } = useAuthContext();
@@ -35,9 +32,21 @@ export default function Layout() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const preview = isPreviewMode();
 
-  const deviceCount = myDevices?.isProvided
-    ? myDevices.devices.length
-    : (1 + deviceRegistry.length);
+  const visibleDevices = myDevices?.isProvided
+    ? myDevices.devices
+    : [{ id: 'smart-bin', access: 'owner' }, ...deviceRegistry.map((dev) => ({ id: dev.id, access: 'owner' }))];
+  const ownedDevices = visibleDevices.filter((dev) => dev.access === 'owner');
+  const sharedDevices = visibleDevices.filter((dev) => dev.access === 'viewer');
+  const canManagePrivacy = preview || (myDevices.resolvedUserId === currentUser?.id && !myDevices.error && ownedDevices.length > 0);
+  const navigationDevices = [{ id: 'smart-bin', path: '/devices/smart-bin' }, ...deviceRegistry];
+  const renderDeviceLinks = (group) => navigationDevices.filter((dev) => group.some((item) => item.id === dev.id)).map((dev) => {
+    const paired = group.find((item) => item.id === dev.id);
+    return <NavLink key={dev.id} to={dev.path} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+      <span className="nav-dev-icon" aria-hidden="true">{getDeviceIcon(dev.id)}</span>
+      <span className="nav-dev-name">{paired?.customName || (dev.id === 'smart-bin' ? t('nav_smart_bin') : getDeviceDisplayName(dev.id, t, dev.name))}</span>
+      <span className="nav-owner-pill">{dev.id === 'smart-bin' && !myDevices?.isProvided ? 'ESP32' : !myDevices?.isProvided ? dev.owner : paired.access === 'owner' ? (lang === 'en' ? 'Owner' : 'Chủ sở hữu') : (lang === 'en' ? 'Viewer' : 'Chỉ xem')}</span>
+    </NavLink>;
+  });
 
   // Refs quản lý focus cho tính tiếp cận (Accessibility - a11y)
   const menuToggleRef = useRef(null);
@@ -145,6 +154,12 @@ export default function Layout() {
     if (pathname === '/notifications') {
       return t('notif_page_title');
     }
+    if (pathname === '/activity') {
+      return lang === 'en' ? 'Activity & sessions' : 'Nhật ký & phiên hoạt động';
+    }
+    if (pathname === '/settings/privacy') {
+      return t('settings_cat_privacy');
+    }
     if (pathname.startsWith('/settings')) {
       return t('nav_settings');
     }
@@ -214,9 +229,19 @@ export default function Layout() {
             <span className="nav-title">{t('nav_notifications_inbox')}</span>
           </NavLink>
 
+          <NavLink to="/activity" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <span className="nav-icon" aria-hidden="true">◷</span>
+            <span className="nav-title">{lang === 'en' ? 'Activity & sessions' : 'Nhật ký & phiên hoạt động'}</span>
+          </NavLink>
+
+          {canManagePrivacy && <NavLink to="/settings/privacy" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <span className="nav-icon" aria-hidden="true">🔒</span>
+            <span className="nav-title">{t('settings_cat_privacy')}</span>
+          </NavLink>}
+
           <NavLink
             to="/settings"
-            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `nav-link ${isActive && location.pathname !== '/settings/privacy' ? 'active' : ''}`}
           >
             <span className="nav-icon" aria-hidden="true">
               ⚙️
@@ -224,56 +249,10 @@ export default function Layout() {
             <span className="nav-title">{t('nav_settings')}</span>
           </NavLink>
 
-          <div className="nav-section-title">
-            {t('nav_smart_devices')} ({deviceCount})
-          </div>
-          {myDevices?.isProvided && myDevices.devices.length === 0 && (
-            <div className="nav-empty-devices-hint">
-              <span>{lang === 'en' ? 'No devices paired' : 'Chưa có thiết bị'}</span>
-            </div>
-          )}
-          {(!myDevices?.isProvided || myDevices.hasDevice('smart-bin')) && (
-            <NavLink
-              to="/devices/smart-bin"
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-            >
-              <span className="nav-dev-icon" aria-hidden="true">
-                {getDeviceIcon('smart-bin')}
-              </span>
-              <span className="nav-dev-name">
-                {myDevices?.devices?.find((d) => d.id === 'smart-bin')?.customName || t('nav_smart_bin')}
-              </span>
-              <span className="nav-owner-pill">
-                {myDevices?.isProvided
-                  ? (myDevices.isOwner('smart-bin')
-                    ? (lang === 'en' ? 'Owner' : 'Chủ sở hữu')
-                    : (lang === 'en' ? 'Viewer' : 'Chỉ xem'))
-                  : 'ESP32'}
-              </span>
-            </NavLink>
-          )}
-          {deviceRegistry.filter((dev) => (!myDevices?.isProvided || myDevices.hasDevice(dev.id))).map((dev) => {
-            const paired = myDevices?.devices?.find((d) => d.id === dev.id);
-            return (
-              <NavLink
-                key={dev.id}
-                to={dev.path}
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-              >
-                <span className="nav-dev-icon" aria-hidden="true">
-                  {getDeviceIcon(dev.id)}
-                </span>
-                <span className="nav-dev-name">{paired?.customName || getDeviceDisplayName(dev.id, t, dev.name)}</span>
-              <span className="nav-owner-pill">
-                {myDevices?.isProvided
-                  ? (myDevices.isOwner(dev.id)
-                    ? (lang === 'en' ? 'Owner' : 'Chủ sở hữu')
-                    : (lang === 'en' ? 'Viewer' : 'Chỉ xem'))
-                  : dev.owner}
-              </span>
-            </NavLink>
-          );
-        })}
+          <div className="nav-section-title nav-section-owned">{lang === 'en' ? 'My devices' : 'Thiết bị của tôi'} ({ownedDevices.length})</div>
+          {ownedDevices.length ? renderDeviceLinks(ownedDevices) : <div className="nav-empty-devices-hint">{lang === 'en' ? 'No devices paired' : 'Chưa thêm thiết bị'}</div>}
+          <div className="nav-section-title nav-section-shared">{lang === 'en' ? 'Shared with me · View only' : 'Được chia sẻ · Chỉ xem'} ({sharedDevices.length})</div>
+          {sharedDevices.length ? renderDeviceLinks(sharedDevices) : <div className="nav-empty-devices-hint">{lang === 'en' ? 'No shared devices' : 'Chưa có thiết bị được chia sẻ'}</div>}
         </nav>
       </aside>
 
@@ -298,9 +277,6 @@ export default function Layout() {
           </div>
 
           <div className="topbar-right">
-            {/* Chỉ báo trạng thái kết nối Hub (Chưa kết nối trong luồng chính vì chưa có MQTT thật) */}
-            <HubStatusIndicator status={liveDevices.devices.some(d => d.brokerConnected) && !liveDevices.error ? "online" : "not_connected"} />
-
             {/* Bộ chuyển đổi ngôn ngữ VI / EN */}
             <LanguageToggle />
 

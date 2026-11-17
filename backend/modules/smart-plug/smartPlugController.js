@@ -1,5 +1,6 @@
 import SmartPlugTelemetry from './smartPlugModel.js';
 import { getDeviceAccess } from '../../src/services/deviceAccess.js';
+import { recordDeviceRead, recordDeniedDeviceRead } from '../../src/services/deviceDataAudit.js';
 
 // Trạng thái bộ nhớ đệm tức thời (In-memory cache) cho thiết bị Smart Plug
 const currentDeviceState = {
@@ -16,22 +17,36 @@ const currentDeviceState = {
   lastUpdated: null
 };
 
+function stateFilter(device) {
+  const filter = { deviceId: 'smart-plug' };
+  if (device?.claimedAt) filter.createdAt = { $gte: device.claimedAt };
+  if (device?.ownershipEpoch > 1) filter.ownershipEpoch = device.ownershipEpoch;
+  return filter;
+}
+
+const emptyState = () => ({ ...currentDeviceState, relayState: 'UNKNOWN', voltage: null,
+  powerWatt: null, energyKwh: null, lightLux: null, isOverloaded: false, overloadThreshold: 2000, verifiedHardware: false,
+  isUntrusted: true, lastUpdated: null });
+
 /**
  * Lấy trạng thái tức thời hiện tại của Ổ cắm thông minh (đồng bộ với DB)
  * GET /api/devices/smart-plug/state
  */
 export async function getState(req, res, next) {
   try {
-    const { canView } = await getDeviceAccess(req.user?._id, 'smart-plug');
+    const { canView, device } = await getDeviceAccess(req.user?._id, 'smart-plug');
     if (!canView) {
+      await recordDeniedDeviceRead({ device, actorId: req.user?._id, source: 'plug-state' });
       return res.status(403).json({
         success: false,
         code: 'FORBIDDEN',
         message: 'Bạn không có quyền xem dữ liệu ổ cắm thông minh.'
       });
     }
+    if (device?.collectionEnabled === false) return res.status(200).json({ success: true, data: { state: null, collectionEnabled: false } });
+    await recordDeviceRead({ device, actorId: req.user?._id, source: 'plug-state' });
 
-    const latest = await SmartPlugTelemetry.findOne({ deviceId: 'smart-plug' })
+    const latest = await SmartPlugTelemetry.findOne(stateFilter(device))
       .sort({ createdAt: -1 })
       .lean();
 
@@ -49,9 +64,9 @@ export async function getState(req, res, next) {
           isUntrusted: Boolean(latest.isUntrusted),
           lastUpdated: latest.createdAt
         }
-      : currentDeviceState;
+      : emptyState();
 
-    Object.assign(currentDeviceState, state);
+    if (latest) Object.assign(currentDeviceState, state);
 
     return res.status(200).json({
       success: true,
@@ -90,11 +105,12 @@ export async function toggleRelay(req, res, next) {
         message: 'Bạn không có quyền điều khiển thiết bị này. Chỉ chủ sở hữu mới được thao tác.'
       });
     }
+    if (device?.ownershipEpoch > 1) return res.status(409).json({ success: false, code: 'PUBLIC_MQTT_TRANSFER_UNSAFE' });
 
-    const latest = await SmartPlugTelemetry.findOne({ deviceId: 'smart-plug' })
+    const latest = await SmartPlugTelemetry.findOne(stateFilter(device))
       .sort({ createdAt: -1 })
       .lean();
-    const isCurrentlyOverloaded = latest ? latest.isOverloaded : currentDeviceState.isOverloaded;
+    const isCurrentlyOverloaded = latest ? latest.isOverloaded : false;
 
     if (isCurrentlyOverloaded && state === 'ON') {
       return res.status(400).json({
@@ -107,10 +123,10 @@ export async function toggleRelay(req, res, next) {
     const recordData = {
       deviceId: 'smart-plug',
       relayState: state,
-      voltage: latest ? latest.voltage : currentDeviceState.voltage,
+      voltage: latest ? latest.voltage : null,
       powerWatt: latest ? latest.powerWatt : null,
-      energyKwh: latest ? latest.energyKwh : currentDeviceState.energyKwh,
-      lightLux: latest ? latest.lightLux : currentDeviceState.lightLux,
+      energyKwh: latest ? latest.energyKwh : null,
+      lightLux: latest ? latest.lightLux : null,
       isOverloaded: false,
       overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold,
       ownershipEpoch: device?.ownershipEpoch ?? null
@@ -166,18 +182,19 @@ export async function resetOverload(req, res, next) {
         message: 'Bạn không có quyền thao tác trên thiết bị này. Chỉ chủ sở hữu mới được thao tác.'
       });
     }
+    if (device?.ownershipEpoch > 1) return res.status(409).json({ success: false, code: 'PUBLIC_MQTT_TRANSFER_UNSAFE' });
 
-    const latest = await SmartPlugTelemetry.findOne({ deviceId: 'smart-plug' })
+    const latest = await SmartPlugTelemetry.findOne(stateFilter(device))
       .sort({ createdAt: -1 })
       .lean();
 
     const recordData = {
       deviceId: 'smart-plug',
       relayState: 'OFF',
-      voltage: latest ? latest.voltage : currentDeviceState.voltage,
+      voltage: latest ? latest.voltage : null,
       powerWatt: latest ? latest.powerWatt : null,
-      energyKwh: latest ? latest.energyKwh : currentDeviceState.energyKwh,
-      lightLux: latest ? latest.lightLux : currentDeviceState.lightLux,
+      energyKwh: latest ? latest.energyKwh : null,
+      lightLux: latest ? latest.lightLux : null,
       isOverloaded: false,
       overloadThreshold: latest ? latest.overloadThreshold : currentDeviceState.overloadThreshold,
       ownershipEpoch: device?.ownershipEpoch ?? null
@@ -210,12 +227,15 @@ export async function getHistory(req, res, next) {
   try {
     const { device, canView } = await getDeviceAccess(req.user?._id, 'smart-plug');
     if (!canView) {
+      await recordDeniedDeviceRead({ device, actorId: req.user?._id, source: 'plug-history' });
       return res.status(403).json({
         success: false,
         code: 'FORBIDDEN',
         message: 'Bạn không có quyền xem lịch sử thiết bị này.'
       });
     }
+    if (device?.collectionEnabled === false) return res.status(200).json({ success: true, data: { records: [], collectionEnabled: false } });
+    await recordDeviceRead({ device, actorId: req.user?._id, source: 'plug-history' });
 
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
 

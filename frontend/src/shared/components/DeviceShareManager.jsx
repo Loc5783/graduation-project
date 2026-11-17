@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthContext } from '../../context/AuthContext.jsx';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { useMyDevices } from '../../context/MyDevicesContext.jsx';
-import { getDeviceShares, shareDevice, revokeDeviceShare } from '../../services/myDeviceService.js';
+import { getDeviceShares, shareDevice, revokeDeviceShare, setDeviceCollection } from '../../services/myDeviceService.js';
+import ActivityLogPanel from './ActivityLogPanel.jsx';
+import { DEVICE_FIELD_LABELS } from './LiveDevicePanel.jsx';
 import './DeviceShareManager.css';
 
 export default function DeviceShareManager({ deviceId, isOwner }) {
   const { lang } = useLanguage();
   const isEn = lang === 'en';
   const navigate = useNavigate();
-  const { devices, updateDevice, unclaimDevice } = useMyDevices();
+  const { currentUser, handleUnauthorized } = useAuthContext();
+  const { devices, updateDevice, unclaimDevice, refreshDevices } = useMyDevices();
 
   const currentDevice = devices.find((d) => d.id === deviceId);
 
@@ -29,8 +33,17 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
   // Quản lý gỡ thiết bị khỏi tài khoản
   const [isConfirmingUnclaim, setIsConfirmingUnclaim] = useState(false);
   const [unclaiming, setUnclaiming] = useState(false);
+  const [savingCollection, setSavingCollection] = useState(false);
 
   const isMountedRef = useRef(true);
+  const userIdRef = useRef(currentUser?.id);
+  userIdRef.current = currentUser?.id;
+
+  useEffect(() => {
+    userIdRef.current = currentUser?.id;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     setNameInput(currentDevice?.customName || '');
@@ -38,18 +51,29 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
 
   const loadShares = useCallback(async () => {
     if (!deviceId || !isOwner) return;
+    const reqUserId = currentUser?.id;
     setLoading(true);
     try {
       const res = await getDeviceShares(deviceId);
-      if (isMountedRef.current && res.success && Array.isArray(res.data?.users)) {
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
+      if (res.success && Array.isArray(res.data?.users)) {
         setShares(res.data.users);
       }
     } catch {
       /* ignore load error */
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setLoading(false);
+      }
     }
-  }, [deviceId, isOwner]);
+  }, [deviceId, isOwner, currentUser?.id, handleUnauthorized]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -61,6 +85,7 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
 
   const handleShare = async (e) => {
     e.preventDefault();
+    const reqUserId = currentUser?.id;
     const cleanEmail = emailInput.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMsg(isEn ? 'Please enter a valid email address.' : 'Vui lòng nhập địa chỉ email hợp lệ.');
@@ -73,6 +98,14 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
 
     try {
       const res = await shareDevice(deviceId, cleanEmail);
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
       if (res.success) {
         setSuccessMsg(isEn ? `Shared view access with ${cleanEmail}` : `Đã chia sẻ quyền xem với ${cleanEmail}`);
         setEmailInput('');
@@ -87,18 +120,31 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
         }
       }
     } catch {
-      setErrorMsg(isEn ? 'Network error during sharing.' : 'Lỗi kết nối khi chia sẻ thiết bị.');
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Network error during sharing.' : 'Lỗi kết nối khi chia sẻ thiết bị.');
+      }
     } finally {
-      setSharing(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setSharing(false);
+      }
     }
   };
 
   const handleRevokeConfirm = async (user) => {
+    const reqUserId = currentUser?.id;
     setRevokingId(user.id);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const res = await revokeDeviceShare(deviceId, user.id);
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
       if (res.success) {
         setSuccessMsg(isEn ? `Revoked access from ${user.email}` : `Đã thu hồi quyền xem của ${user.email}`);
         setConfirmRevokeTarget(null);
@@ -107,14 +153,19 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
         setErrorMsg(res.message || (isEn ? 'Failed to revoke access.' : 'Không thể thu hồi quyền xem.'));
       }
     } catch {
-      setErrorMsg(isEn ? 'Network error during revoke.' : 'Lỗi kết nối khi thu hồi quyền xem.');
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Network error during revoke.' : 'Lỗi kết nối khi thu hồi quyền xem.');
+      }
     } finally {
-      setRevokingId(null);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setRevokingId(null);
+      }
     }
   };
 
   const handleSaveName = async (e) => {
     e.preventDefault();
+    const reqUserId = currentUser?.id;
     const cleanName = nameInput.trim();
     if (cleanName.length > 50) {
       setErrorMsg(isEn ? 'Device name cannot exceed 50 characters.' : 'Tên gợi nhớ tối đa 50 ký tự.');
@@ -126,24 +177,45 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
     setSuccessMsg(null);
     try {
       const res = await updateDevice(deviceId, { customName: cleanName || null });
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
       if (res.success) {
         setSuccessMsg(isEn ? 'Device name updated successfully.' : 'Cập nhật tên gợi nhớ thành công.');
       } else {
         setErrorMsg(res.message || (isEn ? 'Failed to update device name.' : 'Không thể cập nhật tên gợi nhớ.'));
       }
     } catch {
-      setErrorMsg(isEn ? 'Network error during name update.' : 'Lỗi kết nối khi cập nhật tên gợi nhớ.');
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Network error during name update.' : 'Lỗi kết nối khi cập nhật tên gợi nhớ.');
+      }
     } finally {
-      setSavingName(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setSavingName(false);
+      }
     }
   };
 
   const handleResetName = async () => {
+    const reqUserId = currentUser?.id;
     setSavingName(true);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const res = await updateDevice(deviceId, { customName: null });
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
       if (res.success) {
         setNameInput('');
         setSuccessMsg(isEn ? 'Device name reset to default.' : 'Đã khôi phục tên mặc định của thiết bị.');
@@ -151,18 +223,31 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
         setErrorMsg(res.message || (isEn ? 'Failed to reset device name.' : 'Không thể khôi phục tên mặc định.'));
       }
     } catch {
-      setErrorMsg(isEn ? 'Network error during name reset.' : 'Lỗi kết nối khi khôi phục tên mặc định.');
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Network error during name reset.' : 'Lỗi kết nối khi khôi phục tên mặc định.');
+      }
     } finally {
-      setSavingName(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setSavingName(false);
+      }
     }
   };
 
   const handleUnclaimConfirm = async () => {
+    const reqUserId = currentUser?.id;
     setUnclaiming(true);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const res = await unclaimDevice(deviceId);
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
       if (res.success) {
         navigate('/overview');
       } else {
@@ -170,10 +255,44 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
         setIsConfirmingUnclaim(false);
       }
     } catch {
-      setErrorMsg(isEn ? 'Network error during unclaim.' : 'Lỗi kết nối khi gỡ thiết bị khỏi tài khoản.');
-      setIsConfirmingUnclaim(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Network error during unclaim.' : 'Lỗi kết nối khi gỡ thiết bị khỏi tài khoản.');
+        setIsConfirmingUnclaim(false);
+      }
     } finally {
-      setUnclaiming(false);
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setUnclaiming(false);
+      }
+    }
+  };
+
+  const handleCollectionChange = async (event) => {
+    const reqUserId = currentUser?.id;
+    const enabled = event.target.checked;
+    setSavingCollection(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await setDeviceCollection(deviceId, enabled);
+      if (!isMountedRef.current) return;
+      if (reqUserId && reqUserId !== userIdRef.current) return;
+      if (res?.status === 401) {
+        if (reqUserId && reqUserId === userIdRef.current) {
+          handleUnauthorized?.(reqUserId);
+        }
+        return;
+      }
+      if (!res.success) throw new Error(res.message || 'SAVE_FAILED');
+      await refreshDevices();
+      setSuccessMsg(isEn ? 'Privacy setting saved.' : 'Đã lưu quyền thu thập dữ liệu.');
+    } catch {
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setErrorMsg(isEn ? 'Could not save the privacy setting.' : 'Không lưu được quyền thu thập dữ liệu.');
+      }
+    } finally {
+      if (isMountedRef.current && (!reqUserId || reqUserId === userIdRef.current)) {
+        setSavingCollection(false);
+      }
     }
   };
 
@@ -200,6 +319,23 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
           <span aria-hidden="true">✓</span> {successMsg}
         </div>
       )}
+
+      <section className="device-settings-subcard device-collection-card">
+        <div>
+          <h4 className="device-section-title">{isEn ? 'Data collection' : 'Thu thập dữ liệu'}</h4>
+          <p className="device-section-desc">{isEn
+            ? 'When off, the server stops storing readings and hides live and historical readings. The ESP may still measure and send data to the local gateway.'
+            : 'Khi tắt, máy chủ ngừng lưu số đo và ẩn dữ liệu trực tiếp, lịch sử. ESP vẫn có thể đo và gửi tới gateway nội bộ.'}</p>
+        </div>
+        <label className="device-collection-toggle"><input type="checkbox" checked={currentDevice?.collectionEnabled !== false}
+          onChange={handleCollectionChange} disabled={savingCollection || !currentDevice} />
+          <span>{currentDevice?.collectionEnabled === false ? (isEn ? 'Off' : 'Đã tắt') : (isEn ? 'On' : 'Đang bật')}</span></label>
+      </section>
+      <section className="device-settings-subcard" aria-label={isEn ? 'Collected data types' : 'Loại dữ liệu thiết bị thu thập'}>
+        <h4 className="device-section-title">{isEn ? 'Data collected by this device' : 'Thiết bị thu thập dữ liệu gì?'}</h4>
+        <ul className="device-collected-fields">{(currentDevice?.collectedFields || []).map(field =>
+          <li key={field}>{DEVICE_FIELD_LABELS[field]?.[isEn ? 1 : 0] || field}</li>)}</ul>
+      </section>
 
       {/* 1. Khu vực đổi tên gợi nhớ thiết bị */}
       <section className="device-settings-subcard" aria-label={isEn ? 'Friendly name' : 'Tên gợi nhớ'}>
@@ -335,15 +471,17 @@ export default function DeviceShareManager({ deviceId, isOwner }) {
         </div>
       </section>
 
+      <ActivityLogPanel key={deviceId} deviceId={deviceId} />
+
       {/* 3. Khu vực gỡ thiết bị khỏi tài khoản (Danger Zone) */}
       <section className="device-settings-subcard unclaim-subcard" aria-label={isEn ? 'Unclaim device' : 'Gỡ thiết bị khỏi tài khoản'}>
         <h4 className="device-section-title danger-title">
-          {isEn ? 'Danger Zone: Unclaim Device (Not a Secure Transfer)' : 'Khu vực nhạy cảm: Gỡ thiết bị khỏi tài khoản (Không phải chuyển quyền an toàn)'}
+          {isEn ? 'Remove device from account' : 'Gỡ thiết bị khỏi tài khoản'}
         </h4>
         <p className="device-section-desc">
           {isEn
-            ? 'Unclaiming only removes this device from your account. The pairing secret on the device label remains unchanged: anyone who previously knew this secret (including you or past users) can race to re-claim it while unowned. This is NOT a secure ownership transfer (secure transfer with secret rotation is currently unsupported).'
-            : 'Gỡ thiết bị chỉ hủy liên kết thiết bị với tài khoản của bạn. Mã ghép nối bí mật in trên tem thiết bị vẫn giữ nguyên: bất kỳ ai từng biết mã này (kể cả bạn hay người dùng cũ) đều có thể tranh quyền ghép nối khi thiết bị chưa có chủ. Đây KHÔNG phải là chuyển quyền an toàn (chuyển giao an toàn kèm cấp mã bí mật mới hiện chưa được hỗ trợ).'}
+            ? 'This removes your ownership and all shared access. The printed pairing secret stays the same, so anyone who knows it may claim the device afterward. This is not a secure transfer.'
+            : 'Thao tác này hủy quyền sở hữu và mọi lượt chia sẻ. Mã ghép nối trên tem không đổi; người biết mã có thể nhận lại thiết bị. Đây không phải cách chuyển quyền an toàn.'}
         </p>
 
         {isConfirmingUnclaim ? (

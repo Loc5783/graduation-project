@@ -229,3 +229,20 @@ Nhờ proxy này:
 - **Không tự ý commit hay đẩy (push) lên Git** khi chưa có sự chấp thuận của chủ dự án hoặc review hoàn tất từ Chat A.
 - Tuyệt đối không commit các file bí mật: `.env`, `.env.local`, `node_modules/`, `dist/`.
 - Mọi nhánh tính năng của các thành viên tuân thủ cú pháp: `feature/<id-thiet-bi>-<ten-thanh-vien>`.
+
+## 7. Xác minh email và cảnh báo email
+
+Backend mặc định yêu cầu xác minh email cho tài khoản mới ngoài môi trường test. Nếu chưa cấu hình SMTP, API đăng ký trả `EMAIL_NOT_CONFIGURED`; tài khoản cũ không bị khóa. Mã xác minh gồm 6 chữ số, có hạn 10 phút và giới hạn thử/gửi lại. Người dùng nhập mã ở trang đăng ký, sau đó đăng nhập như bình thường.
+
+Với Gmail, chủ tài khoản gửi cần bật xác minh 2 bước và tạo **App Password** trong tài khoản Google. Chỉ nhập App Password vào `backend/.env` trên chính máy chạy backend. Không gửi mật khẩu này qua chat hoặc commit lên Git. Thêm các dòng sau vào `backend/.env` (thay giá trị trong dấu ngoặc bằng dữ liệu thật):
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=<gmail-gui>
+SMTP_FROM=<gmail-gui>
+SMTP_APP_PASSWORD=<app-password>
+EMAIL_VERIFICATION_REQUIRED=true
+```
+
+Khởi động lại backend sau khi cập nhật `.env`. Trong **Cài đặt → Thông báo**, bật kênh Email để nhận cảnh báo gas nguy hiểm, cạy cửa và thiết bị mất kết nối. Công tắc Email chỉ khả dụng khi backend có cấu hình SMTP. Email được gửi cho người sở hữu hoặc người còn quyền xem thiết bị; sự kiện trùng được lọc bằng khóa duy nhất. Bài test tự động sử dụng SMTP giả lập, chưa chứng minh thư đã tới hộp thư Gmail thật.

@@ -10,6 +10,8 @@ import requireAuth from '../middleware/auth.js';
 import verifyOrigin from '../middleware/csrf.js';
 import requireJsonContentType from '../middleware/validateContentType.js';
 import { changePasswordRateLimiter } from '../middleware/rateLimiter.js';
+import ActivityLog from '../models/ActivityLog.js';
+import { publicActivity } from '../services/activityLog.js';
 
 /**
  * Khởi tạo Account Router với các middleware bảo mật tương ứng
@@ -33,6 +35,14 @@ export function createAccountRouter(options = {}) {
 
   // Giai đoạn 3A: Quản lý phiên đăng nhập thật
   router.get('/sessions', authMiddleware, listSessions);
+  router.get('/activity', authMiddleware, async (req, res, next) => {
+    try {
+      const rows = await ActivityLog.find({ actorId: req.user._id, action: { $in: ['REGISTER', 'LOGIN_SUCCESS', 'LOGIN_FAILED'] } })
+        .sort({ createdAt: -1, _id: -1 }).limit(50).lean();
+      res.set('Cache-Control', 'no-store, private');
+      return res.json({ success: true, data: { items: rows.map(publicActivity) } });
+    } catch (error) { return next(error); }
+  });
   router.delete('/sessions/:sessionId', authMiddleware, originMiddleware, revokeSession);
   router.post('/logout-all', authMiddleware, originMiddleware, jsonMiddleware, logoutAll);
 

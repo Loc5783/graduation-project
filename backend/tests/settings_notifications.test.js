@@ -1825,9 +1825,9 @@ describe('Backend Notification Settings API & MongoDB Integration Tests (Phase 4
       expect(resNull.quietHours.allowUrgentBypass).toBe(true);
     });
 
-    it('channels.email luôn luôn chuẩn hóa là false kể cả khi input là true hoặc chuỗi', () => {
+    it('channels.email giữ boolean hợp lệ và chuẩn hóa kiểu sai về false', () => {
       const resTrue = normalizeNotifications({ channels: { email: true } });
-      expect(resTrue.channels.email).toBe(false);
+      expect(resTrue.channels.email).toBe(true);
 
       const resString = normalizeNotifications({ channels: { email: 'true' } });
       expect(resString.channels.email).toBe(false);

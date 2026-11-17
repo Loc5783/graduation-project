@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { normalizeNotifications } from '../constants/notificationDefaults.js';
 import { normalizeAppearance, isValidTimeZone } from '../constants/settingsDefaults.js';
+import { deliverDeviceEmailAlert } from './emailAlertService.js';
 
 /**
  * Làm sạch chuỗi tham số: loại bỏ thẻ/ký tự HTML và cắt ngắn tối đa 100 ký tự.
@@ -166,8 +167,10 @@ export async function dispatchNotification({
     return null;
   }
 
-  // E. Kiểm tra kênh nhận trên web (inAppWeb)
-  if (!notificationsSettings.channels.inAppWeb) {
+  const sendWeb = notificationsSettings.channels.inAppWeb;
+  const sendEmailAlert = notificationsSettings.channels.email &&
+    (eventCode === 'DEVICE_ALERT' || eventCode === 'DEVICE_DISCONNECTED');
+  if (!sendWeb && !sendEmailAlert) {
     return null;
   }
 
@@ -182,6 +185,15 @@ export async function dispatchNotification({
     }
   }
 
+  if (sendEmailAlert && (!inQuiet || (severity === 'urgent' && notificationsSettings.quietHours.allowUrgentBypass))) {
+    try {
+      await deliverDeviceEmailAlert({ userId: targetUser._id, eventCode, eventParams, dedupKey });
+    } catch (error) {
+      console.error('[Email alert] Xử lý thất bại:', error?.code || error?.message);
+    }
+  }
+
+  if (!sendWeb) return null;
   // G. Tạo bản ghi Notification với khóa chống trùng
   try {
     const notification = await Notification.create({

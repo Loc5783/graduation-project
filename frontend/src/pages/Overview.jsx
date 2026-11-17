@@ -23,11 +23,47 @@ export default function Overview() {
     ? myDevices.devices
     : deviceConfigs.map((c) => ({ id: c.id, code: c.id, access: 'owner' }));
   const loading = hasMyDevicesProvider ? myDevices.loading : false;
+  const ownedDevices = devices.filter((device) => device.access === 'owner');
+  const sharedDevices = devices.filter((device) => device.access === 'viewer');
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
 
   const getDeviceConfig = (id) => {
     if (id === 'smart-bin') return SMART_BIN_CONFIG;
     return deviceConfigs.find((c) => c.id === id) || { id, name: id, owner: '' };
+  };
+
+  const renderDeviceGroup = (group, access) => {
+    const shared = access === 'viewer';
+    const title = shared
+      ? (isEn ? 'Shared with me · View only' : 'Được chia sẻ · Chỉ xem')
+      : (isEn ? 'My devices' : 'Thiết bị của tôi');
+    return <section className={`overview-device-group ${shared ? 'overview-group-shared' : 'overview-group-owned'}`} aria-label={title}>
+      <div className="overview-group-heading">
+        <h2 className="section-title">{title} <span className="overview-group-count">{group.length}</span></h2>
+        {shared && <p>{isEn ? 'You can view data; only the owner can change device settings.' : 'Bạn chỉ xem dữ liệu; chủ sở hữu mới có thể thay đổi thiết bị.'}</p>}
+      </div>
+      {group.length > 0 ? <>
+        <LiveDevicePanel allowedDeviceIds={group.map((device) => device.id)} />
+        <div className="overview-device-grid overview-grid">{group.map((dev) => {
+          const config = getDeviceConfig(dev.id);
+          return <div key={dev.id} className="overview-card module-card">
+            <div className="module-card-header">
+              <span className="module-icon-wrap" aria-hidden="true">{getDeviceIcon(dev.id)}</span>
+              <div className="module-badges-wrap">
+                <span className="module-id-badge"><code>{dev.code || dev.id}</code></span>
+                <span className={`device-role-pill ${shared ? 'pill-viewer' : 'pill-owner'}`}>{shared ? (isEn ? 'Viewer' : 'Chỉ xem') : (isEn ? 'Owner' : 'Chủ sở hữu')}</span>
+              </div>
+            </div>
+            <h3 className="module-name">{dev.customName || getDeviceDisplayName(dev.id, t, config.name)}</h3>
+            <p className="module-owner-info">{shared
+              ? (isEn ? 'Shared with you (read only)' : 'Được chia sẻ cho bạn (chỉ xem)')
+              : hasMyDevicesProvider ? (isEn ? 'Your device' : 'Thiết bị của bạn') : <>{t('overview_owner_prefix')} <strong>{config.owner}</strong></>}</p>
+            <div className="card-status-badge"><span className="status-indicator-icon" aria-hidden="true"><SignalIcon /></span><span>{t('overview_status_no_data')}</span></div>
+            <div className="module-card-footer"><Link to={`/devices/${dev.id}`} className="btn btn-outline btn-sm">{t('overview_btn_details')}</Link></div>
+          </div>;
+        })}</div>
+      </> : <p className="overview-group-empty">{shared ? (isEn ? 'No devices have been shared with you.' : 'Chưa có thiết bị nào được chia sẻ cho bạn.') : (isEn ? 'Add a device to start.' : 'Thêm thiết bị để bắt đầu.')}</p>}
+    </section>;
   };
 
   return (
@@ -87,55 +123,10 @@ export default function Overview() {
       )}
 
       {/* Trường hợp đã có thiết bị: Hiển thị LivePanel và danh sách các thiết bị người dùng sở hữu/được chia sẻ */}
-      {devices.length > 0 && (
-        <>
-          <LiveDevicePanel allowedDeviceIds={devices.map((d) => d.id)} />
-
-          <section className="overview-modules-section" aria-label={t('overview_section_title')}>
-            <h2 className="section-title">{t('overview_section_title')}</h2>
-            <div className="overview-device-grid overview-grid">
-              {devices.map((dev) => {
-                const config = getDeviceConfig(dev.id);
-                const isDeviceOwner = dev.access === 'owner';
-                return (
-                  <div key={dev.id} className="overview-card module-card">
-                    <div className="module-card-header">
-                      <span className="module-icon-wrap" aria-hidden="true">
-                        {getDeviceIcon(dev.id)}
-                      </span>
-                      <div className="module-badges-wrap">
-                        <span className="module-id-badge"><code>{dev.code || dev.id}</code></span>
-                        <span className={`device-role-pill ${isDeviceOwner ? 'pill-owner' : 'pill-viewer'}`}>
-                          {isDeviceOwner ? (isEn ? 'Owner' : 'Chủ sở hữu') : (isEn ? 'Viewer' : 'Chỉ xem')}
-                        </span>
-                      </div>
-                    </div>
-                    <h3 className="module-name">{dev.customName || getDeviceDisplayName(dev.id, t, config.name)}</h3>
-                    <p className="module-owner-info">
-                      {isDeviceOwner
-                        ? (hasMyDevicesProvider
-                          ? (isEn ? 'Status: Registered to you' : 'Quyền hạn: Thiết bị của bạn')
-                          : <>{t('overview_owner_prefix')} <strong>{config.owner}</strong></>)
-                        : (isEn ? 'Status: Shared with you (Read-only)' : 'Quyền hạn: Được chia sẻ (Chỉ xem)')}
-                    </p>
-                    <div className="card-status-badge">
-                      <span className="status-indicator-icon" aria-hidden="true">
-                        <SignalIcon />
-                      </span>
-                      <span>{t('overview_status_no_data')}</span>
-                    </div>
-                    <div className="module-card-footer">
-                      <Link to={`/devices/${dev.id}`} className="btn btn-outline btn-sm">
-                        {t('overview_btn_details')}
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </>
-      )}
+      {devices.length > 0 && <div className="overview-device-groups">
+        {renderDeviceGroup(ownedDevices, 'owner')}
+        {renderDeviceGroup(sharedDevices, 'viewer')}
+      </div>}
 
       {/* Modal ghép nối / nhận thiết bị */}
       <ClaimDeviceModal

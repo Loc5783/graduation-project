@@ -38,10 +38,14 @@ export function createOriginVerifier(customOrigins) {
     const allowedOrigins = customOrigins || parseAllowedOrigins();
     const origin = req.headers['origin'];
     const referer = req.headers['referer'];
+    const requestHost = req.headers.host;
+    const isSameHost = origin && requestHost && (
+      origin === `http://${requestHost}` || origin === `https://${requestHost}`
+    );
 
     // 1. Nếu có Origin header
     if (origin) {
-      if (origin === 'null' || !allowedOrigins.includes(origin)) {
+      if (origin === 'null' || (!allowedOrigins.includes(origin) && !isSameHost)) {
         return res.status(403).json({
           success: false,
           code: 'FORBIDDEN_ORIGIN',
@@ -56,7 +60,7 @@ export function createOriginVerifier(customOrigins) {
       const isAllowedReferer = allowedOrigins.some((allowed) => {
         try {
           const refererUrl = new URL(referer);
-          return refererUrl.origin === allowed;
+          return refererUrl.origin === allowed || (requestHost && refererUrl.host === requestHost);
         } catch {
           return false;
         }

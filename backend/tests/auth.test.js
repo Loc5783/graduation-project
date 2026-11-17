@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import mongoose from 'mongoose';
+import nodemailer from 'nodemailer';
 import { connectDB, disconnectDB } from '../src/config/db.js';
 import { createApp } from '../src/app.js';
 import User from '../src/models/User.js';
@@ -933,6 +934,115 @@ describe('Backend Authentication & MongoDB Integration Tests', () => {
       ).rejects.toThrow('Khởi tạo chỉ mục Unique Index email thất bại: Mô phỏng lỗi index duplicate');
 
       initSpy.mockRestore();
+    });
+  });
+
+  describe('Email verification with mocked SMTP', () => {
+    it('cancels only the pending registration with its private token and allows a new attempt', async () => {
+      const previous = Object.fromEntries(['EMAIL_VERIFICATION_REQUIRED', 'SMTP_USER', 'SMTP_FROM', 'SMTP_APP_PASSWORD', 'SESSION_SECRET']
+        .map((key) => [key, process.env[key]]));
+      try {
+        process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
+        process.env.SMTP_USER = 'sender@example.com';
+        process.env.SMTP_FROM = 'sender@example.com';
+        process.env.SMTP_APP_PASSWORD = 'mock-app-password';
+        process.env.SESSION_SECRET = 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4';
+        vi.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail: async () => undefined });
+        const email = 'cancel-flow@example.com';
+        const payload = { fullName: 'Cancel Flow', email, password: 'password-123' };
+        const first = await request(app).post('/api/auth/register').set('Origin', TEST_ORIGIN).send(payload);
+        expect(first.status).toBe(201);
+        const cancellationToken = first.body.data.cancellationToken;
+        expect(cancellationToken).toMatch(/^[a-f0-9]{64}$/);
+        const duplicate = await request(app).post('/api/auth/register').set('Origin', TEST_ORIGIN).send(payload);
+        expect(duplicate.status).toBe(409);
+        const wrong = await request(app).post('/api/auth/cancel-registration').set('Origin', TEST_ORIGIN)
+          .send({ email, cancellationToken: '0'.repeat(64) });
+        expect(wrong.status).toBe(404);
+        expect(await User.countDocuments({ email })).toBe(1);
+        const cancelled = await request(app).post('/api/auth/cancel-registration').set('Origin', TEST_ORIGIN)
+          .send({ email, cancellationToken });
+        expect(cancelled.status).toBe(200);
+        expect(await User.countDocuments({ email })).toBe(0);
+        const again = await request(app).post('/api/auth/register').set('Origin', TEST_ORIGIN).send(payload);
+        expect(again.status).toBe(201);
+        await User.updateOne({ email }, { $set: { emailVerifiedAt: new Date() } });
+        const afterVerification = await request(app).post('/api/auth/cancel-registration').set('Origin', TEST_ORIGIN)
+          .send({ email, cancellationToken: again.body.data.cancellationToken });
+        expect(afterVerification.status).toBe(404);
+        expect(await User.countDocuments({ email })).toBe(1);
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+      }
+    });
+    it('requires the delivered code before a newly registered account can log in', async () => {
+      const previous = Object.fromEntries(['EMAIL_VERIFICATION_REQUIRED', 'SMTP_USER', 'SMTP_FROM', 'SMTP_APP_PASSWORD', 'SESSION_SECRET']
+        .map((key) => [key, process.env[key]]));
+      const sent = [];
+      try {
+        process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
+        process.env.SMTP_USER = 'sender@example.com';
+        process.env.SMTP_FROM = 'sender@example.com';
+        process.env.SMTP_APP_PASSWORD = 'mock-app-password';
+        process.env.SESSION_SECRET = 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4';
+        vi.spyOn(nodemailer, 'createTransport').mockReturnValue({
+          sendMail: async (mail) => { sent.push(mail); }
+        });
+        const email = 'verify-flow@example.com';
+        const registration = await request(app).post('/api/auth/register').set('Origin', TEST_ORIGIN)
+          .send({ fullName: 'Verify Flow', email, password: 'password-123' });
+        expect(registration.status).toBe(201);
+        expect(registration.body.data.verificationRequired).toBe(true);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].to).toBe(email);
+        const code = sent[0].text.match(/\b\d{6}\b/)?.[0];
+        expect(code).toMatch(/^\d{6}$/);
+        const before = await request(app).post('/api/auth/login').set('Origin', TEST_ORIGIN)
+          .send({ email, password: 'password-123' });
+        expect(before.status).toBe(403);
+        expect(before.body.code).toBe('EMAIL_NOT_VERIFIED');
+        const wrong = await request(app).post('/api/auth/verify-email').set('Origin', TEST_ORIGIN)
+          .send({ email, code: code === '000000' ? '111111' : '000000' });
+        expect(wrong.status).toBe(400);
+        const valid = await request(app).post('/api/auth/verify-email').set('Origin', TEST_ORIGIN)
+          .send({ email, code });
+        expect(valid.status).toBe(200);
+        const after = await request(app).post('/api/auth/login').set('Origin', TEST_ORIGIN)
+          .send({ email, password: 'password-123' });
+        expect(after.status).toBe(200);
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+      }
+    });
+    it('allows only one resend when requests arrive together', async () => {
+      const previous = Object.fromEntries(['EMAIL_VERIFICATION_REQUIRED', 'SMTP_USER', 'SMTP_FROM', 'SMTP_APP_PASSWORD', 'SESSION_SECRET']
+        .map((key) => [key, process.env[key]]));
+      const sendMail = vi.fn().mockResolvedValue(undefined);
+      try {
+        process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
+        process.env.SMTP_USER = 'sender@example.com';
+        process.env.SMTP_FROM = 'sender@example.com';
+        process.env.SMTP_APP_PASSWORD = 'mock-app-password';
+        process.env.SESSION_SECRET = 'test-secret-fa1ab6a023fd985fc4e25f146661e475d32dd29a833e2e561123902445b6e3c4';
+        vi.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail });
+        const email = 'verify-resend@example.com';
+        const registration = await request(app).post('/api/auth/register').set('Origin', TEST_ORIGIN)
+          .send({ fullName: 'Verify Resend', email, password: 'password-123' });
+        expect(registration.status).toBe(201);
+        await User.updateOne({ email }, { $set: { emailVerificationSentAt: new Date(Date.now() - 61000) } });
+        const responses = await Promise.all([1, 2].map(() => request(app).post('/api/auth/resend-verification')
+          .set('Origin', TEST_ORIGIN).send({ email })));
+        expect(responses.every((response) => response.status === 200)).toBe(true);
+        expect(sendMail).toHaveBeenCalledTimes(2); // original registration + one resend
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+      }
     });
   });
 });

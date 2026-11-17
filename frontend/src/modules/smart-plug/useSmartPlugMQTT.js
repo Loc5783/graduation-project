@@ -11,7 +11,7 @@ import Paho from 'paho-mqtt';
  * - Cooldown Lock 1.2s: Chống giật ngược trạng thái do các gói tin cũ bị trễ nhịp.
  * - Khả năng phản hồi tức thời 0ms delay (Optimistic UI).
  */
-export function useSmartPlugMQTT({ canPublish = false } = {}) {
+export function useSmartPlugMQTT({ _canPublish = false, enabled = true } = {}) {
   const [isMqttConnected, setIsMqttConnected] = useState(false);
   const [isDeviceOnline, setIsDeviceOnline] = useState(false);
   const [relayState, setRelayState] = useState(null); // true: Đèn sáng, false: Đèn tắt
@@ -30,12 +30,22 @@ export function useSmartPlugMQTT({ canPublish = false } = {}) {
   const brokerHost = 'broker.emqx.io';
   const brokerPort = 8084;
   const brokerPath = '/mqtt';
-  const topicCmd = 'shp/device-smart-plug-01/command';
   const topicStatus = 'shp/device-smart-plug-01/status';
   const topicTelemetry = 'shp/device-smart-plug-01/telemetry';
 
+  // Khóa hoàn toàn phát lệnh trên kênh MQTT công khai cho MỌI runtime (Dev, Test, Prod) để bảo đảm an toàn thiết bị
+  const isPublicPublishLocked = true;
+
   useEffect(() => {
     isMountedRef.current = true;
+    if (!enabled) {
+      setIsMqttConnected(false);
+      setIsDeviceOnline(false);
+      setRelayState(null);
+      setFanState(false);
+      setLastSeen(null);
+      return;
+    }
 
     // Trong môi trường test Vitest/JSDOM không có WebSocket thực thụ
     if (typeof window === 'undefined' || !window.WebSocket) {
@@ -161,91 +171,39 @@ export function useSmartPlugMQTT({ canPublish = false } = {}) {
         }
       }
     };
-  }, [topicStatus, topicTelemetry]);
+  }, [topicStatus, topicTelemetry, enabled]);
 
-  // Gửi lệnh đóng/ngắt rơ-le (Bật/tắt bóng LED)
-  const publishRelayCommand = useCallback((turnOn) => {
-    if (!canPublish) {
-      console.warn('[MQTT] Lệnh điều khiển rơ-le bị từ chối: tài khoản không phải chủ sở hữu.');
-      return false;
-    }
-    // Đặt mốc thời gian khóa chống giật lùi trạng thái
-    lastUserCommandTimeRef.current = Date.now();
-    setRelayState(turnOn);
+  // Gửi lệnh đóng/ngắt rơ-le - Khóa hoàn toàn trên kênh công khai cho mọi runtime
+  const publishRelayCommand = useCallback(() => {
+    console.warn('[MQTT] Lệnh điều khiển rơ-le bị khóa trên kênh công khai cho mọi runtime để bảo đảm an toàn cho thiết bị.');
+    return false;
+  }, []);
 
-    if (!clientRef.current || !clientRef.current.isConnected()) {
-      return false;
-    }
-    try {
-      const payload = JSON.stringify({ relay: turnOn ? 'ON' : 'OFF' });
-      const message = new Paho.Message(payload);
-      message.destinationName = topicCmd;
-      message.qos = 0;
-      clientRef.current.send(message);
-      return true;
-    } catch (err) {
-      console.error('[MQTT] Lỗi gửi lệnh rơ-le:', err);
-      return false;
-    }
-  }, [topicCmd, canPublish]);
+  // Gửi lệnh đóng/ngắt Rơ-le 2 - Khóa hoàn toàn trên kênh công khai cho mọi runtime
+  const publishFanCommand = useCallback(() => {
+    console.warn('[MQTT] Lệnh điều khiển quạt bị khóa trên kênh công khai cho mọi runtime để bảo đảm an toàn cho thiết bị.');
+    return false;
+  }, []);
 
-  // Gửi lệnh đóng/ngắt Rơ-le 2 (Bật/tắt Quạt làm mát 5V)
-  const publishFanCommand = useCallback((turnOn) => {
-    if (!canPublish) {
-      console.warn('[MQTT] Lệnh điều khiển quạt bị từ chối: tài khoản không phải chủ sở hữu.');
-      return false;
-    }
-    lastFanCommandTimeRef.current = Date.now();
-    setFanState(turnOn);
-
-    if (!clientRef.current || !clientRef.current.isConnected()) {
-      return false;
-    }
-    try {
-      const payload = JSON.stringify({ fan: turnOn ? 'ON' : 'OFF' });
-      const message = new Paho.Message(payload);
-      message.destinationName = topicCmd;
-      message.qos = 0;
-      clientRef.current.send(message);
-      return true;
-    } catch (err) {
-      console.error('[MQTT] Lỗi gửi lệnh quạt:', err);
-      return false;
-    }
-  }, [topicCmd, canPublish]);
-
-  // Gửi lệnh bật/tắt chế độ tự động
-  const publishAutoCommand = useCallback((enableAuto) => {
-    if (!canPublish) {
-      console.warn('[MQTT] Lệnh bật/tắt tự động bị từ chối: tài khoản không phải chủ sở hữu.');
-      return false;
-    }
-    setIsAutoMode(Boolean(enableAuto));
-    if (!clientRef.current || !clientRef.current.isConnected()) {
-      return false;
-    }
-    try {
-      const payload = JSON.stringify({ auto: Boolean(enableAuto) });
-      const message = new Paho.Message(payload);
-      message.destinationName = topicCmd;
-      message.qos = 0;
-      clientRef.current.send(message);
-      return true;
-    } catch (err) {
-      console.error('[MQTT] Lỗi gửi lệnh tự động:', err);
-      return false;
-    }
-  }, [topicCmd, canPublish]);
+  // Gửi lệnh bật/tắt chế độ tự động - Khóa hoàn toàn trên kênh công khai cho mọi runtime
+  const publishAutoCommand = useCallback(() => {
+    console.warn('[MQTT] Lệnh bật/tắt tự động bị khóa trên kênh công khai cho mọi runtime để bảo đảm an toàn cho thiết bị.');
+    return false;
+  }, []);
 
   return {
     isMqttConnected,
-    isDeviceOnline,
+    isDeviceOnline, // Tín hiệu gói tin từ topic MQTT công khai (chưa xác thực danh tính thiết bị)
+    hasPublicTelemetry: isDeviceOnline,
+    isPublicSourceUnauthenticated: true, // Nguồn tin công khai không có chữ ký xác thực
+    isPhysicalHardwareVerified: false, // Tuyệt đối không khẳng định ESP32 vật lý đang trực tuyến
     relayState,
     fanState,
     isRoomDark,
     isAutoMode,
     deviceIp,
     lastSeen,
+    isPublicPublishLocked,
     publishRelayCommand,
     publishFanCommand,
     publishAutoCommand

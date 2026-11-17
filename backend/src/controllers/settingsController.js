@@ -5,6 +5,7 @@ import { normalizeNotifications } from '../constants/notificationDefaults.js';
 import { validateNotificationUpdate } from '../validators/notificationValidator.js';
 import { normalizePrivacy } from '../constants/privacyDefaults.js';
 import { validatePrivacyUpdate } from '../validators/privacyValidator.js';
+import { isEmailConfigured } from '../services/emailService.js';
 
 /**
  * Lấy thông tin cài đặt của người dùng hiện tại (GET /api/settings).
@@ -39,7 +40,8 @@ export async function getSettings(req, res, next) {
       data: {
         appearance,
         notifications,
-        privacy
+        privacy,
+        capabilities: { emailNotifications: isEmailConfigured() }
       }
     });
   } catch (error) {

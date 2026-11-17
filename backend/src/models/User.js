@@ -200,6 +200,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Mật khẩu băm là bắt buộc.']
     },
+    emailVerificationRequired: { type: Boolean, default: false },
+    emailVerifiedAt: { type: Date, default: null },
+    emailVerificationHash: { type: String, default: null, select: false },
+    emailVerificationExpiresAt: { type: Date, default: null, select: false },
+    emailVerificationSentAt: { type: Date, default: null, select: false },
+    emailVerificationAttempts: { type: Number, default: 0, select: false },
+    registrationCancelHash: { type: String, default: null, select: false },
     authVersion: {
       type: Number,
       default: 0,
@@ -229,6 +236,11 @@ const userSchema = new mongoose.Schema(
         delete ret.__v;
         delete ret.passwordHash; // Tuyệt đối không để lộ mật khẩu băm ra JSON
         delete ret.authVersion; // Không để lộ phiên bản xác thực nội bộ ra JSON
+        delete ret.emailVerificationHash;
+        delete ret.emailVerificationExpiresAt;
+        delete ret.emailVerificationSentAt;
+        delete ret.emailVerificationAttempts;
+        delete ret.registrationCancelHash;
         return ret;
       }
     }

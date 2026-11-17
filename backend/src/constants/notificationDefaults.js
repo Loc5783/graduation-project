@@ -77,7 +77,7 @@ export function isValidTimeFormat(val) {
  * 3. Bảo toàn boolean false hợp lệ; không dùng truthiness để thay false thành default.
  * 4. Enum hoặc giờ không hợp lệ được thay bằng giá trị mặc định an toàn.
  * 5. allowUrgentBypass chuẩn hóa luôn là true.
- * 6. email chuẩn hóa luôn là false khi hệ thống chưa hỗ trợ gửi email.
+ * 6. email giữ nguyên boolean hợp lệ; mặc định false khi dữ liệu thiếu hoặc sai kiểu.
  * 7. Tuyệt đối không mutate đầu vào hoặc object defaults.
  * 8. Không thực hiện bất kỳ thao tác ghi database nào trong hàm.
  *
@@ -132,8 +132,9 @@ export function normalizeNotifications(raw) {
   const inAppWeb = typeof rawChannels.inAppWeb === 'boolean'
     ? rawChannels.inAppWeb
     : NOTIFICATION_DEFAULTS.channels.inAppWeb;
-  // email luôn chuẩn hóa là false khi khả năng gửi email chưa được hỗ trợ
-  const email = false;
+  const email = typeof rawChannels.email === 'boolean'
+    ? rawChannels.email
+    : NOTIFICATION_DEFAULTS.channels.email;
 
   return {
     types: {

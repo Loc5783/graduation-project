@@ -434,7 +434,7 @@ export default function AccountSettings() {
 
         <div className="account-devices-section">
           <h4 className="account-devices-title">{t('account_assigned_devices')}</h4>
-          <p className="account-devices-hint" style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #888)', margin: '0.25rem 0 0.75rem' }}>
+          <p className="account-devices-hint" style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem' }}>
             {t('account_devices_rbac_note')}
           </p>
 

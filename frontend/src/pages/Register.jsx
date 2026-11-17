@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { calculatePasswordStrength, useAuthContext } from '../context/AuthContext.jsx';
 import { useLanguage, getErrorMessage } from '../context/LanguageContext.jsx';
 import LanguageToggle from '../shared/components/LanguageToggle.jsx';
+import { verifyEmailService, resendVerificationService } from '../services/authService.js';
 import {
   AuthBrandHeader,
   UserIcon,
@@ -29,6 +30,7 @@ function getUtf8ByteLength(str = '') {
 export default function Register() {
   const { register } = useAuthContext();
   const { t } = useLanguage();
+  const location = useLocation();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -44,6 +46,19 @@ export default function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverNotice, setServerNotice] = useState(null);
   const [isRegisterSuccess, setIsRegisterSuccess] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState(() => location.state?.verificationEmail || '');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState('');
+  const [resendAfter, setResendAfter] = useState(0);
+  const [clockNow, setClockNow] = useState(Date.now());
+  const [existingVerificationEmail, setExistingVerificationEmail] = useState('');
+
+  useEffect(() => {
+    if (!verificationEmail || !resendAfter || Date.now() >= resendAfter) return undefined;
+    const timer = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [verificationEmail, resendAfter]);
 
   // Refs để tự động focus vào trường lỗi đầu tiên
   const fullNameRef = useRef(null);
@@ -177,6 +192,14 @@ export default function Register() {
       });
 
       if (result.success) {
+        if (result.data?.verificationRequired === true) {
+          setVerificationEmail(formData.email.trim().toLowerCase());
+          setVerificationCode('');
+          setVerificationNotice('');
+          setResendAfter(Date.now() + 60000);
+        } else {
+          setIsRegisterSuccess(true);
+        }
         // Đăng ký thành công: xóa mật khẩu và thông tin khỏi state
         setFormData({
           fullName: '',
@@ -184,8 +207,13 @@ export default function Register() {
           password: '',
           confirmPassword: ''
         });
-        setIsRegisterSuccess(true);
       } else {
+        if (result.code === 'EMAIL_DELIVERY_FAILED') {
+          setVerificationEmail(formData.email.trim().toLowerCase());
+          setVerificationNotice(result.message);
+          setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+          return;
+        }
         // Xử lý email trùng lặp: hiển thị ngay dưới ô email bằng mã lỗi DUPLICATE_KEY
         if (result.status === 409 || result.code === 'DUPLICATE_KEY' || result.errors?.email) {
           setErrors((prev) => ({
@@ -222,6 +250,28 @@ export default function Register() {
   };
 
   const strength = calculatePasswordStrength(formData.password);
+
+  const handleVerify = async (event) => {
+    event.preventDefault();
+    if (verificationBusy || !EMAIL_REGEX.test(verificationEmail) || !/^\d{6}$/.test(verificationCode)) return;
+    setVerificationBusy(true);
+    const result = await verifyEmailService({ email: verificationEmail, code: verificationCode });
+    setVerificationBusy(false);
+    if (result.success) {
+      setIsRegisterSuccess(true);
+      setVerificationEmail('');
+      setVerificationCode('');
+    } else setVerificationNotice(result.message);
+  };
+
+  const handleResend = async () => {
+    if (verificationBusy || Date.now() < resendAfter || !EMAIL_REGEX.test(verificationEmail)) return;
+    setVerificationBusy(true);
+    const result = await resendVerificationService({ email: verificationEmail });
+    setVerificationBusy(false);
+    setVerificationNotice(result.message);
+    if (result.success) setResendAfter(Date.now() + 60000);
+  };
   const strengthLabels = {
     1: t('strength_weak'),
     2: t('strength_medium'),
@@ -249,6 +299,26 @@ export default function Register() {
         </div>
       </div>
     );
+  }
+
+  if (verificationEmail) {
+    return <div className="au-page-wrapper"><div className="au-card au-card-register">
+      <div className="au-card-glow-bar" aria-hidden="true" />
+      <div className="au-card-header-bar"><AuthBrandHeader subtitle={t('brand_subtitle')} /><LanguageToggle className="au-lang-toggle" /></div>
+      <h1 className="au-title">{t('verify_email_title')}</h1>
+      <p className="au-success-desc">{t('verify_email_sent')} <strong>{verificationEmail}</strong></p>
+      {verificationNotice && <div className="au-alert au-alert-warning" role="status">{verificationNotice}</div>}
+      <form onSubmit={handleVerify} className="au-form">
+        <label htmlFor="verification-code" className="au-label">{t('verify_email_code')}</label>
+        <input id="verification-code" className="au-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+          value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))} />
+        <button type="submit" className="au-btn au-btn-primary" disabled={verificationBusy || !/^\d{6}$/.test(verificationCode)}>{t('verify_email_submit')}</button>
+      </form>
+      <button type="button" className="au-link" disabled={verificationBusy || clockNow < resendAfter} onClick={handleResend}>
+        {t('verify_email_resend')}{clockNow < resendAfter ? ` (${Math.ceil((resendAfter - clockNow) / 1000)}s)` : ''}
+      </button>
+      <Link to="/login" className="au-link">{t('link_login')}</Link>
+    </div></div>;
   }
 
   return (
@@ -461,6 +531,12 @@ export default function Register() {
         </form>
 
         <footer className="au-footer">
+          <div style={{ marginBottom: '0.75rem' }}>
+            <input type="email" className="au-input" value={existingVerificationEmail}
+              onChange={(e) => setExistingVerificationEmail(e.target.value)} placeholder={t('email_placeholder')} aria-label={t('email_label')} />
+            <button type="button" className="au-link" disabled={!EMAIL_REGEX.test(existingVerificationEmail.trim())}
+              onClick={() => { setVerificationEmail(existingVerificationEmail.trim().toLowerCase()); setVerificationNotice(''); }}>{t('verify_email_existing')}</button>
+          </div>
           {t('have_account')}{' '}
           <Link to="/login" className="au-link">
             {t('link_login')}

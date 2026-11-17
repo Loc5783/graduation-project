@@ -5,7 +5,7 @@
   justify-content: center;
   padding: 4rem 1rem;
   gap: 1rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--color-text-muted);
 }
 
 .device-guard-unauthorized {
@@ -18,8 +18,8 @@
 .unauthorized-card {
   max-width: 480px;
   width: 100%;
-  background: var(--bg-card, #ffffff);
-  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 2.5rem 2rem;
   text-align: center;
@@ -36,12 +36,12 @@
   font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: var(--text-primary, #0f172a);
+  color: var(--color-text-main);
 }
 
 .unauthorized-card p {
   font-size: 0.9rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--color-text-muted);
   line-height: 1.5;
   margin-bottom: 1.5rem;
 }
@@ -57,8 +57,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
-  background: var(--bg-card, #ffffff);
-  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 0.65rem 1rem;
   margin-bottom: 1.25rem;
@@ -75,23 +75,29 @@
 }
 
 .access-pill-owner {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .access-pill-viewer {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
 }
 
 .viewer-restriction-hint {
   font-size: 0.8rem;
-  color: var(--text-muted, #64748b);
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 .device-owner-share-section {
   margin-top: 2rem;
 }
+.device-data-inventory, .device-collection-paused { margin: 1rem 0; padding: 1rem 1.25rem; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg-surface); color: var(--color-text-main); }
+.device-data-inventory summary { cursor: pointer; font-weight: 600; }
+.device-data-inventory ul { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; margin: 0.8rem 0 0; }
+.device-data-inventory li { padding: 0.35rem 0.6rem; background: var(--color-bg-subtle); border-radius: 999px; font-size: 0.85rem; }
+.device-collection-paused h2 { font-size: 1.1rem; margin: 0 0 0.4rem; }
+.device-collection-paused p { margin: 0; color: var(--color-text-muted); }

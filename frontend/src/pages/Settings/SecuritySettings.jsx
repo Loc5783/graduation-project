@@ -73,7 +73,7 @@ function RefreshIcon({ isSpinning }) {
 /**
  * Component Quản lý Bảo mật & Phiên đăng nhập thật (Route: /settings/security)
  */
-export default function SecuritySettings() {
+export default function SecuritySettings({ embedded = false }) {
   const { t, lang } = useLanguage();
   const { currentUser, handleUnauthorized } = useAuthContext();
   const { currentSettings } = useSettings();
@@ -600,10 +600,10 @@ export default function SecuritySettings() {
   return (
     <div className="security-settings-container">
       {/* Header trang Bảo mật */}
-      <div className="settings-page-header">
+      {!embedded && <div className="settings-page-header">
         <h2 className="settings-page-title">{t('security_title')}</h2>
         <p className="settings-page-desc">{t('security_page_desc')}</p>
-      </div>
+      </div>}
 
       {/* Chế độ xem trước (Preview Mode): Không dựng phiên giả, không gọi API */}
       {isPreviewMode() && (

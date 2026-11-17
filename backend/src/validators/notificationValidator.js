@@ -6,6 +6,7 @@ import {
   NOTIFICATION_ENUMS,
   isValidTimeFormat
 } from '../constants/notificationDefaults.js';
+import { isEmailConfigured } from '../services/emailService.js';
 
 /**
  * Kiểm tra và xác thực dữ liệu đầu vào cho yêu cầu cập nhật cài đặt thông báo (PATCH /api/settings/notifications).
@@ -26,7 +27,7 @@ import {
  *    - startTime, endTime phải là chuỗi đúng định dạng HH:mm (từ 00:00 đến 23:59).
  * 6. Khóa nghiệp vụ:
  *    - allowUrgentBypass không thể đặt thành false (trả về lỗi 400).
- *    - email: true chưa khả dụng -> trả về lỗi 400 CHANNEL_NOT_AVAILABLE.
+ *    - email: true chỉ khả dụng khi máy chủ đã cấu hình SMTP.
  * 7. Validate toàn bộ trước khi ghi; một trường sai không cho phép lưu một phần.
  *
  * @param {any} body Dữ liệu payload từ req.body
@@ -314,19 +315,19 @@ export function validateNotificationUpdate(body) {
         };
       }
 
-      // Khóa nghiệp vụ: Kênh email chưa khả dụng -> từ chối khi client cố tình bật true
-      if (chVal.email === true) {
+      // Không cho bật kênh email nếu máy chủ chưa cấu hình SMTP.
+      if (chVal.email === true && !isEmailConfigured()) {
         return {
           isValid: false,
           status: 400,
           code: 'CHANNEL_NOT_AVAILABLE',
-          message: 'Kênh thông báo email hiện chưa khả dụng do hệ thống chưa tích hợp máy chủ gửi thư.',
+          message: 'Kênh thông báo email chưa khả dụng vì máy chủ chưa cấu hình gửi thư.',
           errors: { 'channels.email': 'Kênh thông báo email hiện chưa khả dụng.' }
         };
       }
 
       chData = chData || {};
-      chData.email = false;
+      chData.email = chVal.email;
       validLeafCount++;
     }
 

@@ -497,6 +497,12 @@ describe('Toàn bộ vòng đời: Tài khoản -> Claim -> Đổi tên -> Chia 
       const bHistory = await request(app).get('/api/devices/smart-plug/history').set('Cookie', ownerB);
       expect(bHistory.status).toBe(200);
       expect(bHistory.body.data.records).toEqual([]);
+      const bState = await request(app).get('/api/devices/smart-plug/state').set('Cookie', ownerB);
+      expect(bState.status).toBe(200);
+      expect(bState.body.data.state.voltage).toBeNull();
+      expect(bState.body.data.state.relayState).toBe('UNKNOWN');
+      expect((await request(app).post('/api/devices/smart-plug/relay').set('Cookie', ownerB)
+        .set('Origin', ORIGIN).send({ state: 'ON' })).status).toBe(409);
 
       // A bị chặn 403
       expect((await request(app).get('/api/devices/smart-plug/history').set('Cookie', ownerA)).status).toBe(403);

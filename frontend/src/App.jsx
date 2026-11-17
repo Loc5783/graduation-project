@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuthContext } from './context/AuthContext.jsx';
-import { MyDevicesProvider } from './context/MyDevicesContext.jsx';
+import { MyDevicesProvider, useMyDevices } from './context/MyDevicesContext.jsx';
 import { LiveDeviceProvider } from './context/LiveDeviceContext.jsx';
 import { DeviceProvider } from './context/DeviceContext.jsx';
 import { LanguageProvider, useLanguage, getErrorMessage } from './context/LanguageContext.jsx';
@@ -19,6 +19,7 @@ import NotificationsPage from './pages/NotificationsPage.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 import SettingsLayout from './pages/Settings/SettingsLayout.jsx';
+import ActivityPage from './pages/ActivityPage.jsx';
 import SettingsIndex from './pages/Settings/SettingsIndex.jsx';
 import AppearanceSettings from './pages/Settings/AppearanceSettings.jsx';
 import AccountSettings from './pages/Settings/AccountSettings.jsx';
@@ -68,6 +69,22 @@ function ProtectedRoute({ children }) {
   }
 
   return children;
+}
+
+function PrivacyOwnerRoute({ children }) {
+  const { currentUser } = useAuthContext();
+  const { devices, resolvedUserId, error, refreshDevices } = useMyDevices();
+  if (isPreviewMode()) return children;
+  if (resolvedUserId !== currentUser?.id) {
+    return <div role="status" className="auth-loading-screen">Đang kiểm tra quyền thiết bị...</div>;
+  }
+  if (error) {
+    return <div role="alert" className="auth-error-screen"><div className="auth-error-card">
+      <p>Không thể kiểm tra quyền thiết bị.</p>
+      <button type="button" className="btn btn-primary" onClick={refreshDevices}>Thử lại</button>
+    </div></div>;
+  }
+  return devices.some(device => device.access === 'owner') ? children : <Navigate to="/overview" replace />;
 }
 
 function PublicAuthRoute({ children }) {
@@ -140,6 +157,7 @@ export default function App() {
                           }
                         />
                         <Route path="notifications" element={<NotificationsPage />} />
+                        <Route path="activity" element={<ActivityPage />} />
 
                         {/* Tự động nạp đủ 5 route thiết bị từ registry được bảo vệ qua DeviceGuard */}
                         {deviceRegistry.map((item) => (
@@ -161,7 +179,7 @@ export default function App() {
                           <Route path="account" element={<AccountSettings />} />
                           <Route path="security" element={<SecuritySettings />} />
                           <Route path="notifications" element={<NotificationSettings />} />
-                          <Route path="privacy" element={<PrivacySettings />} />
+                          <Route path="privacy" element={<PrivacyOwnerRoute><PrivacySettings /></PrivacyOwnerRoute>} />
                           <Route path="admin" element={<PlaceholderSection sectionKey="admin" />} />
                           <Route path="help" element={<PlaceholderSection sectionKey="help" />} />
                         </Route>

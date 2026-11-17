@@ -1,5 +1,9 @@
 import { apiRequest, isPreviewMode } from './authService.js';
 
+export async function getAccountActivityService() {
+  return await apiRequest('/api/account/activity', { method: 'GET' });
+}
+
 /**
  * Cập nhật thông tin hồ sơ tài khoản (PATCH /api/account/profile).
  * Chỉ hỗ trợ cập nhật họ và tên (name).

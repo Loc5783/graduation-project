@@ -4,7 +4,8 @@ import { ALLOWED_NOTIFICATION_TYPES_FIELDS } from '../constants/notificationDefa
 export const NOTIFICATION_EVENT_CODES = Object.freeze([
   'SESSION_REVOKED',
   'DEVICE_DISCONNECTED',
-  'DEVICE_ALERT'
+  'DEVICE_ALERT',
+  'UNUSUAL_DATA_ACCESS'
 ]);
 
 export const NOTIFICATION_SEVERITIES = Object.freeze([

@@ -41,6 +41,11 @@ export default function NotificationItem({
     description = `${t('notif_device_label')} ${device} • ${t('notif_browser_label')} ${browser}`;
   }
 
+  if (eventCode === 'UNUSUAL_DATA_ACCESS') {
+    title = lang === 'en' ? 'Unusual data access' : 'Truy cập dữ liệu bất thường';
+    description = lang === 'en' ? `A denied attempt to read ${params?.deviceId || 'a device'} was recorded.`
+      : `Đã ghi nhận lượt đọc bị từ chối đối với ${params?.deviceId || 'thiết bị'}.`;
+  }
   if (eventCode === 'DEVICE_DISCONNECTED' || eventCode === 'DEVICE_ALERT') {
     const deviceId = typeof params?.deviceId === 'string' ? params.deviceId : '';
     const known = ['smart-door-lock', 'window-sensor', 'smart-bin', 'environment-sensor', 'smart-plug'];

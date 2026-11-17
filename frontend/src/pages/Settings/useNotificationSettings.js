@@ -37,7 +37,7 @@ export function cloneNotifications(notif) {
     },
     channels: {
       inAppWeb: Boolean(notif.channels?.inAppWeb),
-      email: false
+      email: Boolean(notif.channels?.email)
     }
   };
 }
@@ -65,10 +65,10 @@ export function isValidNotificationsContract(data) {
   if (typeof data.quietHours.endTime !== 'string' || !isValidTimeFormat(data.quietHours.endTime)) return false;
   if (data.quietHours.allowUrgentBypass !== true) return false;
 
-  // channels: email bắt buộc phải là false trong giai đoạn này (chưa hỗ trợ gửi email)
+  // channels: cả hai kênh phải là boolean hợp lệ.
   if (!data.channels || typeof data.channels !== 'object' || Array.isArray(data.channels)) return false;
   if (typeof data.channels.inAppWeb !== 'boolean') return false;
-  if (data.channels.email !== false) return false;
+  if (typeof data.channels.email !== 'boolean') return false;
 
   return true;
 }
@@ -124,6 +124,9 @@ export function computeLeafDiffs(source, target) {
   }
   if (source.channels.inAppWeb !== target.channels?.inAppWeb) {
     diffs['channels.inAppWeb'] = source.channels.inAppWeb;
+  }
+  if (source.channels.email !== target.channels?.email) {
+    diffs['channels.email'] = source.channels.email;
   }
   return diffs;
 }
@@ -219,6 +222,7 @@ export function useNotificationSettings() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadStatus, setLoadStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [loadError, setLoadError] = useState(null);
+  const [emailAvailable, setEmailAvailable] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
   const [saveError, setSaveError] = useState(null);
@@ -568,6 +572,7 @@ export function useNotificationSettings() {
       }
 
       if (res.success && res.data?.notifications && isValidNotificationsContract(res.data.notifications)) {
+        setEmailAvailable(res.data?.capabilities?.emailNotifications === true);
         const serverNotif = cloneNotifications(res.data.notifications);
         lastAppliedFetchSeqRef.current = myFetchSeq;
         persistedRef.current = serverNotif;
@@ -608,6 +613,7 @@ export function useNotificationSettings() {
   useEffect(() => {
     isMountedRef.current = true;
     accountEpochRef.current += 1;
+    setEmailAvailable(false);
     fetchSeqRef.current = 0;
     lastAppliedFetchSeqRef.current = 0;
     mutationSeqRef.current = 0;
@@ -785,6 +791,7 @@ export function useNotificationSettings() {
     saveStatus,
     saveError,
     isPreview,
+    emailAvailable,
     updateLeafField,
     handleTimeInputChange,
     retrySave,

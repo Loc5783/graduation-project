@@ -30,6 +30,16 @@ describe('durable device observations', () => {
   });
 
   it('records genuine allowlisted gateway readings and serves them after observer recreation', async () => {
+    const password = 'MatKhau@123';
+    await request(app).post('/api/auth/register').set('Origin', 'http://localhost:5173')
+      .send({ fullName: 'History User', email: 'history.user@example.com', password });
+    const login = await request(app).post('/api/auth/login').set('Origin', 'http://localhost:5173')
+      .send({ email: 'history.user@example.com', password });
+    const userDoc = await User.findOne({ email: 'history.user@example.com' });
+    expect((await request(app).get('/api/device-history/window-sensor').set('Cookie', login.headers['set-cookie'])).status).toBe(403);
+    await RegisteredDevice.create({ code: 'CBCC01', deviceId: 'window-sensor',
+      claimSecretHash: await hashPairingSecret('pairing-secret-window-1234'),
+      ownerUserId: userDoc._id, claimedAt: new Date(Date.now() - 60000) });
     const body = { 'window-sensor': { brokerConnected: true, fresh: true, telemetryAgeSeconds: 1,
       telemetry: { doorOpen: true, motion: false, password: 'never-export' } } };
     const fetchImpl = async () => ({ ok: true, text: async () => JSON.stringify(body) });
@@ -38,25 +48,6 @@ describe('durable device observations', () => {
     expect(await DeviceObservation.countDocuments({ deviceId: 'window-sensor' })).toBe(1);
     expect(await observer.poll()).toBe(true);
     expect(await DeviceObservation.countDocuments({ deviceId: 'window-sensor' })).toBe(1);
-    const password = 'MatKhau@123';
-    await request(app).post('/api/auth/register').set('Origin', 'http://localhost:5173')
-      .send({ fullName: 'History User', email: 'history.user@example.com', password });
-    const login = await request(app).post('/api/auth/login').set('Origin', 'http://localhost:5173')
-      .send({ email: 'history.user@example.com', password });
-    const userDoc = await User.findOne({ email: 'history.user@example.com' });
-
-    // Khi chưa nhận thiết bị: từ chối 403 FORBIDDEN
-    expect((await request(app).get('/api/device-history/window-sensor').set('Cookie', login.headers['set-cookie'])).status).toBe(403);
-
-    // Gán quyền sở hữu trong RegisteredDevice (đặt claimedAt trước thời điểm sinh quan sát)
-    await RegisteredDevice.create({
-      code: 'CBCC01',
-      deviceId: 'window-sensor',
-      claimSecretHash: await hashPairingSecret('pairing-secret-window-1234'),
-      ownerUserId: userDoc._id,
-      claimedAt: new Date(Date.now() - 60000)
-    });
-
     expect((await request(app).get('/api/device-history/window-sensor')).status).toBe(401);
     const result = await request(app).get('/api/device-history/window-sensor').set('Cookie', login.headers['set-cookie']);
     expect(result.status).toBe(200);
@@ -66,6 +57,9 @@ describe('durable device observations', () => {
   });
 
   it('stores an offline transition without inventing an offline reading', async () => {
+    await RegisteredDevice.create({ code: 'CBCC01', deviceId: 'window-sensor',
+      claimSecretHash: await hashPairingSecret('pairing-secret-window-1234'),
+      ownerUserId: new mongoose.Types.ObjectId(), claimedAt: new Date(Date.now() - 60000) });
     let live = true;
     const fetchImpl = async () => ({ ok: true, text: async () => JSON.stringify({
       'window-sensor': { brokerConnected: true, fresh: live, telemetryAgeSeconds: live ? 1 : 16,

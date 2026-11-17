@@ -3,6 +3,7 @@ import requireAuth from '../middleware/auth.js';
 import DeviceObservation from '../models/DeviceObservation.js';
 import { LIVE_DEVICE_FIELDS } from './liveDeviceRoutes.js';
 import { getDeviceAccess } from '../services/deviceAccess.js';
+import { recordDeviceRead, recordDeniedDeviceRead } from '../services/deviceDataAudit.js';
 
 export function createDeviceHistoryRouter({ auth = requireAuth, deviceAccessService = { getDeviceAccess } } = {}) {
   const router = Router();
@@ -14,7 +15,11 @@ export function createDeviceHistoryRouter({ auth = requireAuth, deviceAccessServ
         ? await deviceAccessService.getDeviceAccess(req.user._id, deviceId)
         : { canView: process.env.NODE_ENV === 'test' && !req.user ? true : false, device: null };
       if (!access.canView) {
+        if (req.user?._id) await recordDeniedDeviceRead({ device: access.device, actorId: req.user._id, source: 'history' });
         return res.status(403).json({ success: false, code: 'FORBIDDEN', message: 'Bạn không có quyền xem lịch sử thiết bị này.' });
+      }
+      if (access.device?.collectionEnabled === false) {
+        return res.status(200).json({ success: true, data: { deviceId, scope: 'collection_paused', items: [] } });
       }
       const rawLimit = req.query.limit ?? '120';
       if (Object.keys(req.query).some((key) => key !== 'limit') || !/^\d+$/.test(String(rawLimit)) || Number(rawLimit) < 1 || Number(rawLimit) > 300) {
@@ -40,6 +45,7 @@ export function createDeviceHistoryRouter({ auth = requireAuth, deviceAccessServ
       }
 
       const rows = await DeviceObservation.find(filter).sort({ observedAt: -1, _id: -1 }).limit(Number(rawLimit)).lean();
+      if (req.user?._id) await recordDeviceRead({ device: access.device, actorId: req.user._id, source: 'history' });
       res.set('Cache-Control', 'no-store, private');
       return res.status(200).json({ success: true, data: { deviceId, scope: 'system_observations_30_days',
         items: rows.reverse().map((item) => ({ observedAt: item.observedAt, fresh: item.fresh,

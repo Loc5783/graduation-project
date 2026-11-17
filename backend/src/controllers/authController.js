@@ -3,6 +3,10 @@ import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
 import parseUserAgent from '../utils/userAgentParser.js';
+import { recordActivity } from '../services/activityLog.js';
+import RegisteredDevice from '../models/RegisteredDevice.js';
+import { emailVerificationEnabled, issueVerificationCode, matchesVerificationCode, VERIFICATION_RESEND_MS } from '../services/emailVerificationService.js';
+import { isEmailConfigured } from '../services/emailService.js';
 
 // Hash mẫu định dạng bcrypt hợp lệ dùng để ngăn chặn tấn công Timing Attack khi không tìm thấy user
 const DUMMY_HASH = '$2b$10$mZx5eYBEFGMl8F8kHFsCE.fRS0THTVp5US0ZRgsrN1yDhwEKfTEj6';
@@ -63,9 +67,20 @@ export async function register(req, res, next) {
 
     const normalizedEmail = email.trim().toLowerCase();
     const sanitizedName = fullName.trim();
+    const verificationRequired = emailVerificationEnabled();
+    if (verificationRequired && !isEmailConfigured()) {
+      return res.status(503).json({ success: false, code: 'EMAIL_NOT_CONFIGURED', message: 'Máy chủ chưa cấu hình gửi email xác minh.' });
+    }
 
     // Kiểm tra trùng lặp email trước khi băm để trả lời nhanh
-    const existing = await User.findOne({ email: normalizedEmail });
+    let existing = await User.findOne({ email: normalizedEmail }).select('+emailVerificationExpiresAt');
+    if (existing?.emailVerificationRequired && !existing.emailVerifiedAt &&
+      existing.emailVerificationExpiresAt &&
+      existing.emailVerificationExpiresAt <= new Date()) {
+      await User.deleteOne({ _id: existing._id, emailVerifiedAt: null,
+        emailVerificationExpiresAt: { $lte: new Date() }, owned: { $size: 0 } });
+      existing = await User.findOne({ email: normalizedEmail });
+    }
     if (existing) {
       return res.status(409).json({
         success: false,
@@ -82,19 +97,37 @@ export async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, salt);
 
     // Lưu vào database với quyền cố định: viewer, owned: []
+    const cancellationToken = verificationRequired ? crypto.randomBytes(32).toString('hex') : null;
     const newUser = await User.create({
       name: sanitizedName,
       email: normalizedEmail,
       passwordHash,
       role: 'viewer',
-      owned: []
+      owned: [],
+      emailVerificationRequired: verificationRequired,
+      emailVerifiedAt: verificationRequired ? null : new Date(),
+      registrationCancelHash: cancellationToken ? crypto.createHash('sha256').update(cancellationToken).digest('hex') : null
     });
+
+    if (verificationRequired) {
+      try {
+        await issueVerificationCode(newUser);
+      } catch (mailError) {
+        console.error('[Email] Không gửi được mã xác minh:', mailError?.code || mailError?.message);
+        await User.deleteOne({ _id: newUser._id, emailVerifiedAt: null, registrationCancelHash: newUser.registrationCancelHash });
+        return res.status(503).json({ success: false, code: 'EMAIL_DELIVERY_FAILED', message: 'Chưa gửi được mã xác minh. Vui lòng thử đăng ký lại.' });
+      }
+    }
+
+    await recordActivity({ action: 'REGISTER', actorId: newUser._id, ownerId: newUser._id });
 
     // Trả về 201 Created (không kèm passwordHash, không tạo session)
     return res.status(201).json({
       success: true,
-      message: 'Đăng ký tài khoản thành công.',
+      message: verificationRequired ? 'Đã gửi mã xác minh đến email của bạn.' : 'Đăng ký tài khoản thành công.',
       data: {
+        verificationRequired,
+        cancellationToken,
         user: {
           id: newUser._id.toString(),
           name: newUser.name,
@@ -108,6 +141,63 @@ export async function register(req, res, next) {
   } catch (error) {
     next(error);
   }
+}
+
+export async function verifyRegistrationEmail(req, res, next) {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const code = req.body?.code;
+    if (!EMAIL_REGEX.test(email) || email.length > 255 || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ success: false, code: 'VALIDATION_ERROR', message: 'Email hoặc mã xác minh không hợp lệ.' });
+    }
+    const user = await User.findOne({ email }).select('+emailVerificationHash +emailVerificationExpiresAt +emailVerificationSentAt +emailVerificationAttempts');
+    if (!user || !user.emailVerificationRequired || user.emailVerifiedAt) {
+      return res.status(400).json({ success: false, code: 'INVALID_VERIFICATION_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
+    }
+    const now = new Date();
+    if (!matchesVerificationCode(user, code, now)) {
+      await User.updateOne({ _id: user._id, emailVerifiedAt: null, emailVerificationAttempts: { $lt: 5 } }, { $inc: { emailVerificationAttempts: 1 } });
+      return res.status(400).json({ success: false, code: 'INVALID_VERIFICATION_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
+    }
+    const updated = await User.findOneAndUpdate({ _id: user._id, emailVerifiedAt: null,
+      emailVerificationHash: user.emailVerificationHash,
+      emailVerificationExpiresAt: { $gt: now }, emailVerificationAttempts: { $lt: 5 } },
+    { $set: { emailVerifiedAt: now }, $unset: { emailVerificationHash: '', emailVerificationExpiresAt: '', emailVerificationSentAt: '', registrationCancelHash: '' } }, { returnDocument: 'after' });
+    if (!updated) return res.status(400).json({ success: false, code: 'INVALID_VERIFICATION_CODE', message: 'Mã không hợp lệ hoặc đã hết hạn.' });
+    return res.json({ success: true, message: 'Email đã được xác minh. Bạn có thể đăng nhập.' });
+  } catch (error) { next(error); }
+}
+
+export async function cancelRegistration(req, res, next) {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const token = req.body?.cancellationToken;
+    if (!EMAIL_REGEX.test(email) || typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) {
+      return res.status(400).json({ success: false, code: 'VALIDATION_ERROR', message: 'Yêu cầu hủy không hợp lệ.' });
+    }
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const result = await User.deleteOne({ email, registrationCancelHash: hash, emailVerificationRequired: true,
+      emailVerifiedAt: null, owned: { $size: 0 } });
+    if (result.deletedCount !== 1) return res.status(404).json({ success: false, code: 'REGISTRATION_NOT_FOUND', message: 'Lượt đăng ký không còn hiệu lực.' });
+    return res.json({ success: true, message: 'Đã hủy lượt đăng ký.' });
+  } catch (error) { next(error); }
+}
+
+export async function resendRegistrationCode(req, res, next) {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!EMAIL_REGEX.test(email) || email.length > 255) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR', message: 'Email không hợp lệ.' });
+    if (!isEmailConfigured()) return res.status(503).json({ success: false, code: 'EMAIL_NOT_CONFIGURED', message: 'Máy chủ chưa cấu hình gửi email.' });
+    const user = await User.findOne({ email }).select('+emailVerificationHash +emailVerificationExpiresAt +emailVerificationSentAt +emailVerificationAttempts');
+    if (user?.emailVerificationRequired && !user.emailVerifiedAt) {
+      const now = new Date();
+      if (!user.emailVerificationSentAt || now - user.emailVerificationSentAt >= VERIFICATION_RESEND_MS) {
+        try { await issueVerificationCode(user, now); }
+        catch (mailError) { console.error('[Email] Gửi lại mã thất bại:', mailError?.code || mailError?.message); }
+      }
+    }
+    return res.json({ success: true, message: 'Nếu tài khoản đang chờ xác minh, mã mới sẽ được gửi đến email.' });
+  } catch (error) { next(error); }
 }
 
 /**
@@ -172,11 +262,18 @@ export async function login(req, res, next) {
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
+      const client = parseUserAgent(req.headers['user-agent']);
+      await recordActivity({ action: 'LOGIN_FAILED', actorId: user._id, ownerId: user._id,
+        deviceLabel: client.deviceLabel, browserLabel: client.browserLabel });
       return res.status(401).json({
         success: false,
         code: 'INVALID_CREDENTIALS',
         message: 'Email hoặc mật khẩu không chính xác.'
       });
+    }
+
+    if (user.emailVerificationRequired === true && !user.emailVerifiedAt) {
+      return res.status(403).json({ success: false, code: 'EMAIL_NOT_VERIFIED', message: 'Vui lòng xác minh email trước khi đăng nhập.' });
     }
 
     if (user.isLocked === true) {
@@ -249,6 +346,17 @@ export async function login(req, res, next) {
           return next(saveErr);
         }
 
+        await recordActivity({ action: 'LOGIN_SUCCESS', actorId: user._id, ownerId: user._id, deviceLabel, browserLabel });
+        try {
+          const sharedDevices = await RegisteredDevice.find({ viewerUserIds: user._id, ownerUserId: { $ne: null } })
+            .select('deviceId ownerUserId ownershipEpoch').lean();
+          for (const device of sharedDevices) {
+            await recordActivity({ action: 'SHARED_VIEWER_LOGIN', actorId: user._id, ownerId: device.ownerUserId,
+              deviceId: device.deviceId, ownershipEpoch: device.ownershipEpoch, deviceLabel, browserLabel });
+          }
+        } catch (error) {
+          console.error('[ActivityLog] Không thể ghi đăng nhập của người được chia sẻ:', error.message);
+        }
         return res.status(200).json({
           success: true,
           message: 'Đăng nhập thành công.',

@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAuthContext } from '../../context/AuthContext.jsx';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { useMyDevices } from '../../context/MyDevicesContext.jsx';
-import { canEditDevice, getPermissionExplanation } from '../../shared/roles.js';
 import {
-  getSmartPlugState,
-  toggleSmartPlugRelay,
-  resetSmartPlugOverload
+  getSmartPlugState
 } from '../../services/smartPlugService.js';
 import { isPreviewMode } from '../../services/authService.js';
 import { useSmartPlugMQTT } from './useSmartPlugMQTT.js';
@@ -114,11 +110,14 @@ const i18n = {
     fanOff: 'Tắt quạt',
     btnAuto: 'Tự động',
     // Đo điện & Relay
-    metricPower: 'Trạng thái kênh Relay',
-    powerNotice: 'Chỉ hiển thị trạng thái lệnh relay phần mềm; phần cứng không có cảm biến đo điện áp, dòng điện hay công suất thật.',
-    brokerNotice: 'Giới hạn hạ tầng: Smart Plug sử dụng broker MQTT công khai (EMQX Cloud WSS 8084) không có xác thực, chưa tích hợp broker Mosquitto nội bộ có ACL.',
-    ledHint: 'Trạng thái lệnh relay (không khẳng định bóng đèn sáng thực tế)',
-    fanHint: 'Trạng thái lệnh relay (không khẳng định quạt quay thực tế)',
+    metricPower: 'Trạng thái kênh Relay (Phần mềm)',
+    powerNotice: 'Chỉ hiển thị trạng thái lệnh relay phần mềm lưu trên máy chủ (chế độ chỉ xem); phần cứng chưa có kênh điều khiển nội bộ có xác thực và không có cảm biến đo điện thật.',
+    brokerNotice: 'Giới hạn hạ tầng: Smart Plug kết nối nhận tin (Subscribe) từ broker MQTT công khai (EMQX Cloud WSS 8084) không có xác thực danh tính. Hệ thống chưa tích hợp broker Mosquitto nội bộ có ACL/mTLS.',
+    authenticityWarning: 'Cảnh báo tính xác thực: Bản tin nhận từ broker MQTT công khai không có chữ ký số hay danh tính thiết bị, có thể bị giả mạo bởi bên thứ ba. Giao diện KHÔNG khẳng định phần cứng ESP32 thật đang trực tuyến hay trạng thái relay thực tế.',
+    mqttPublicSignalActive: 'Nguồn MQTT công khai: Có tín hiệu (Chưa xác thực nguồn)',
+    mqttPublicSignalInactive: 'Nguồn MQTT công khai: Không có tín hiệu',
+    ledHint: 'Trạng thái lệnh relay phần mềm (chưa chứng minh bóng đèn sáng thực tế)',
+    fanHint: 'Trạng thái lệnh relay phần mềm (chưa chứng minh quạt quay thực tế)',
     // Hẹn giờ kiểu iPhone
     timerTitle: 'Hẹn giờ tắt thiết bị',
     targetBoth: 'Cả hai thiết bị',
@@ -129,7 +128,8 @@ const i18n = {
     btnStartTimer: 'Bắt đầu hẹn giờ',
     btnCancelTimer: 'Hủy hẹn giờ',
     timerActivePrefix: 'Tự động tắt',
-    quickPresets: 'Chọn nhanh:'
+    quickPresets: 'Chọn nhanh:',
+    publicPublishLockedNotice: 'Chế độ chỉ xem: Kênh điều khiển nội bộ an toàn chưa được tích hợp. Để bảo đảm an toàn thiết bị, toàn bộ tính năng điều khiển công tắc, quạt và hẹn giờ đã được khóa cho đến khi hoàn thiện hạ tầng bảo mật.'
   },
   en: {
     title: 'Smart Plug',
@@ -145,11 +145,14 @@ const i18n = {
     fanOn: 'Start Fan',
     fanOff: 'Stop Fan',
     btnAuto: 'Auto',
-    metricPower: 'Relay Channel State',
-    powerNotice: 'Displays software relay switch state only. Hardware lacks voltage, current, or real power metering sensors.',
-    brokerNotice: 'Infrastructure limitation: Smart Plug uses an unauthenticated public MQTT broker (EMQX Cloud WSS 8084); internal Mosquitto broker with ACL is not yet integrated.',
-    ledHint: 'Relay command state (does not confirm physical bulb illumination)',
-    fanHint: 'Relay command state (does not confirm physical fan rotation)',
+    metricPower: 'Relay Channel State (Software)',
+    powerNotice: 'Displays server software relay state only (read-only mode); authenticated internal control channel is not yet integrated and hardware lacks physical power sensors.',
+    brokerNotice: 'Infrastructure limitation: Smart Plug receives telemetry (Subscribe) from an unauthenticated public MQTT broker (EMQX Cloud WSS 8084). Internal Mosquitto broker with ACL/mTLS is not yet integrated.',
+    authenticityWarning: 'Authenticity warning: Telemetry received from public MQTT broker lacks device cryptographic identity and can be spoofed. The UI DOES NOT assert that real physical ESP32 hardware is online or that physical relays are actuated.',
+    mqttPublicSignalActive: 'Public MQTT: Signal detected (Unverified source)',
+    mqttPublicSignalInactive: 'Public MQTT: No signal',
+    ledHint: 'Software relay state (does not confirm physical bulb illumination)',
+    fanHint: 'Software relay state (does not confirm physical fan rotation)',
     timerTitle: 'Device Auto-Off Timer',
     targetBoth: 'Both Devices',
     targetLight: 'LED Light',
@@ -159,7 +162,8 @@ const i18n = {
     btnStartTimer: 'Start Timer',
     btnCancelTimer: 'Cancel Timer',
     timerActivePrefix: 'Auto-off for',
-    quickPresets: 'Quick presets:'
+    quickPresets: 'Quick presets:',
+    publicPublishLockedNotice: 'Read-only mode: Secure internal control channel is not yet integrated. For hardware safety, all controls (relays, fan, auto mode, timer) are locked until authenticated infrastructure is complete.'
   }
 };
 
@@ -183,15 +187,13 @@ function getInitialTimerState() {
 }
 
 export default function SmartPlugOwnerArea() {
-  const { currentUser } = useAuthContext();
   const { language } = useLanguage();
   const isVi = language === 'vi';
   const text = isVi ? i18n.vi : i18n.en;
 
   const myDevices = useMyDevices();
   const preview = isPreviewMode();
-  const userCanEdit = preview || (myDevices?.isProvided ? myDevices.isOwner('smart-plug') : canEditDevice(currentUser, 'smart-plug'));
-  const permissionMessage = getPermissionExplanation(currentUser, 'smart-plug');
+  const collectionEnabled = preview || myDevices.devices.find(device => device.id === 'smart-plug')?.collectionEnabled !== false;
 
   // Trạng thái Bật/Tắt bóng LED (Rơ-le 1)
   const [isRelayOn, setIsRelayOn] = useState(false);
@@ -201,7 +203,6 @@ export default function SmartPlugOwnerArea() {
 
   // Chế độ tự động bật đèn khi trời tối
   const [isAutoLightMode, setIsAutoLightMode] = useState(false);
-  const [isRoomDark, setIsRoomDark] = useState(false);
 
   // Bộ hẹn giờ kiểu iPhone
   const [timerTarget, setTimerTarget] = useState('both'); // 'both' | 'light' | 'fan'
@@ -218,18 +219,15 @@ export default function SmartPlugOwnerArea() {
   const [isOverloaded, setIsOverloaded] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  // Kết nối MQTT thời gian thực với phần cứng ESP32 qua EMQX
+  // Kết nối MQTT thời gian thực với phần cứng ESP32 qua EMQX (chế độ chỉ xem)
   const {
     isMqttConnected,
     isDeviceOnline,
     relayState: mqttRelay,
     fanState: mqttFan,
-    isRoomDark: mqttDark,
     isAutoMode: mqttAutoMode,
-    publishRelayCommand,
-    publishFanCommand,
-    publishAutoCommand
-  } = useSmartPlugMQTT({ canPublish: Boolean(userCanEdit) });
+    isPublicPublishLocked
+  } = useSmartPlugMQTT({ enabled: collectionEnabled });
 
   // Đồng bộ trạng thái thực tế từ ESP32 khi nhận bản tin MQTT
   useEffect(() => {
@@ -243,12 +241,6 @@ export default function SmartPlugOwnerArea() {
       setIsFanOn(mqttFan);
     }
   }, [mqttFan]);
-
-  useEffect(() => {
-    if (isDeviceOnline) {
-      setIsRoomDark(mqttDark);
-    }
-  }, [isDeviceOnline, mqttDark]);
 
   useEffect(() => {
     if (isDeviceOnline) {
@@ -267,7 +259,6 @@ export default function SmartPlugOwnerArea() {
       const left = Math.round((activeTimer.targetTimestamp - Date.now()) / 1000);
       if (left <= 0) {
         setRemainingSeconds(0);
-        const expiredTarget = activeTimer.targetDevice;
         setActiveTimer(null);
         try {
           window.localStorage.removeItem(TIMER_STORAGE_KEY);
@@ -275,22 +266,12 @@ export default function SmartPlugOwnerArea() {
           /* ignore storage remove error */
         }
 
-        // Tự động ngắt nguồn thiết bị đã chọn
-        if (expiredTarget === 'light' || expiredTarget === 'both') {
-          setIsRelayOn(false);
-          publishRelayCommand(false);
-          toggleSmartPlugRelay('OFF').catch(() => {});
-        }
-        if (expiredTarget === 'fan' || expiredTarget === 'both') {
-          setIsFanOn(false);
-          publishFanCommand(false);
-        }
-
+        // Hẹn giờ hoàn tất trong chế độ chỉ xem: không gửi lệnh ngắt rơ-le qua kênh chưa xác thực
         setNotice({
-          type: 'success',
+          type: 'info',
           text: isVi
-            ? `Hẹn giờ hoàn tất: Đã tự động tắt ${expiredTarget === 'both' ? 'cả hai thiết bị' : expiredTarget === 'light' ? 'Đèn LED' : 'Quạt làm mát'} an toàn.`
-            : `Timer finished: Safely turned off ${expiredTarget}.`
+            ? `Hẹn giờ hoàn tất: Bộ đếm thời gian đã kết thúc (chế độ chỉ xem, lệnh điều khiển đang bị khóa).`
+            : `Timer finished: Time has elapsed (read-only mode, controls are locked).`
         });
       } else {
         setRemainingSeconds(left);
@@ -300,7 +281,7 @@ export default function SmartPlugOwnerArea() {
     updateRemaining();
     const intervalId = setInterval(updateRemaining, 1000);
     return () => clearInterval(intervalId);
-  }, [activeTimer, publishRelayCommand, publishFanCommand, isVi]);
+  }, [activeTimer, isVi]);
 
   // Đọc trạng thái ban đầu từ backend nếu có
   useEffect(() => {
@@ -322,133 +303,43 @@ export default function SmartPlugOwnerArea() {
     return () => { isMounted = false; };
   }, []);
 
-  // Thao tác Bật/Tắt bóng LED (Rơ-le 1) - Khóa hoàn toàn khi đang bật Tự động
+  // Thao tác Bật/Tắt bóng LED (Rơ-le 1) - Khóa an toàn do chưa có kênh điều khiển nội bộ xác thực
   const handleToggleRelay = () => {
-    if (isAutoLightMode) {
-      return; // Khóa không thể bấm khi đang ở chế độ Tự động
-    }
-
-    if (!userCanEdit) {
-      setNotice({
-        type: 'warning',
-        text: permissionMessage || (isVi ? 'Tài khoản của bạn chỉ có quyền xem, không được điều khiển.' : 'Read-only account cannot control plug.')
-      });
-      return;
-    }
-
-    setNotice(null);
-    const nextState = !isRelayOn;
-    setIsRelayOn(nextState);
-    publishRelayCommand(nextState);
-    toggleSmartPlugRelay(nextState ? 'ON' : 'OFF').catch(() => {});
-  };
-
-  // Thao tác Bật/Tắt Quạt làm mát 5V (Rơ-le 2)
-  const handleToggleFan = () => {
-    if (!userCanEdit) {
-      setNotice({
-        type: 'warning',
-        text: permissionMessage || (isVi ? 'Tài khoản của bạn chỉ có quyền xem, không được điều khiển.' : 'Read-only account cannot control plug.')
-      });
-      return;
-    }
-
-    setNotice(null);
-    const nextState = !isFanOn;
-    setIsFanOn(nextState);
-    publishFanCommand(nextState);
-  };
-
-  // Thao tác Bật/Tắt Chế độ Tự động (kèm đồng bộ tức thời với ánh sáng môi trường)
-  const handleToggleAuto = () => {
-    if (!userCanEdit) {
-      setNotice({ type: 'warning', text: permissionMessage });
-      return;
-    }
-
-    setNotice(null);
-    const nextMode = !isAutoLightMode;
-    setIsAutoLightMode(nextMode);
-    publishAutoCommand(nextMode);
-
-    if (nextMode) {
-      // Khi bật Tự động: đèn lập tức thích ứng với ánh sáng hiện tại
-      if (isRoomDark) {
-        setIsRelayOn(true);
-        publishRelayCommand(true);
-        toggleSmartPlugRelay('ON').catch(() => {});
-      } else {
-        setIsRelayOn(false);
-        publishRelayCommand(false);
-        toggleSmartPlugRelay('OFF').catch(() => {});
-      }
-    }
-  };
-
-  // Khôi phục rơ-le sau sự cố quá tải
-  const handleResetOverload = async () => {
-    try {
-      await resetSmartPlugOverload();
-      setIsOverloaded(false);
-      setNotice({
-        type: 'success',
-        text: isVi ? 'Đã khôi phục rơ-le an toàn.' : 'Overload safely reset.'
-      });
-    } catch {
-      setNotice({
-        type: 'danger',
-        text: isVi ? 'Lỗi kết nối khi gửi yêu cầu khôi phục.' : 'Connection error during reset.'
-      });
-    }
-  };
-
-  // Bắt đầu hẹn giờ tắt thiết bị kiểu iPhone
-  const handleStartTimer = () => {
-    if (!userCanEdit) {
-      setNotice({ type: 'warning', text: permissionMessage });
-      return;
-    }
-
-    const totalSec = (timerHours * 3600) + (timerMinutes * 60);
-    if (totalSec <= 0) {
-      setNotice({
-        type: 'warning',
-        text: isVi ? 'Vui lòng chọn thời gian hẹn giờ tối thiểu 1 phút.' : 'Please set a timer of at least 1 minute.'
-      });
-      return;
-    }
-
-    // Tự động bật thiết bị mục tiêu nếu đang tắt
-    if ((timerTarget === 'light' || timerTarget === 'both') && !isRelayOn) {
-      setIsRelayOn(true);
-      publishRelayCommand(true);
-      toggleSmartPlugRelay('ON').catch(() => {});
-    }
-    if ((timerTarget === 'fan' || timerTarget === 'both') && !isFanOn) {
-      setIsFanOn(true);
-      publishFanCommand(true);
-    }
-
-    const targetTs = Date.now() + totalSec * 1000;
-    const timerData = {
-      targetTimestamp: targetTs,
-      targetDevice: timerTarget,
-      totalSeconds: totalSec
-    };
-
-    setActiveTimer(timerData);
-    setRemainingSeconds(totalSec);
-    try {
-      window.localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(timerData));
-    } catch {
-      /* ignore storage save error */
-    }
-
     setNotice({
-      type: 'success',
-      text: isVi
-        ? `Đã kích hoạt hẹn giờ tắt cho ${timerTarget === 'both' ? 'Cả hai thiết bị' : timerTarget === 'light' ? 'Đèn LED' : 'Quạt làm mát'}.`
-        : `Timer started for ${timerTarget}.`
+      type: 'warning',
+      text: text.publicPublishLockedNotice
+    });
+  };
+
+  // Thao tác Bật/Tắt Quạt làm mát 5V (Rơ-le 2) - Khóa an toàn
+  const handleToggleFan = () => {
+    setNotice({
+      type: 'warning',
+      text: text.publicPublishLockedNotice
+    });
+  };
+
+  // Thao tác Bật/Tắt Chế độ Tự động - Khóa an toàn
+  const handleToggleAuto = () => {
+    setNotice({
+      type: 'warning',
+      text: text.publicPublishLockedNotice
+    });
+  };
+
+  // Khôi phục rơ-le sau sự cố quá tải - Khóa an toàn
+  const handleResetOverload = () => {
+    setNotice({
+      type: 'warning',
+      text: text.publicPublishLockedNotice
+    });
+  };
+
+  // Bắt đầu hẹn giờ tắt thiết bị kiểu iPhone - Khóa an toàn
+  const handleStartTimer = () => {
+    setNotice({
+      type: 'warning',
+      text: text.publicPublishLockedNotice
     });
   };
 
@@ -1190,17 +1081,38 @@ export default function SmartPlugOwnerArea() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.65rem', borderRadius: '9999px', background: isMqttConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: isMqttConnected ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            {isMqttConnected ? (isVi ? 'Broker EMQX: Đã kết nối' : 'EMQX Broker: Connected') : (isVi ? 'Broker EMQX: Đang kết nối...' : 'EMQX Broker: Connecting...')}
+            {isMqttConnected ? (isVi ? 'Broker EMQX (Công khai): Đã kết nối' : 'Public EMQX: Connected') : (isVi ? 'Broker EMQX (Công khai): Đang kết nối...' : 'Public EMQX: Connecting...')}
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.65rem', borderRadius: '9999px', background: isDeviceOnline ? 'rgba(6, 182, 212, 0.15)' : 'rgba(148, 163, 184, 0.15)', color: isDeviceOnline ? '#06b6d4' : '#94a3b8', fontWeight: 600 }}>
+          <span
+            data-testid="smart-plug-telemetry-status"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.25rem 0.65rem',
+              borderRadius: '9999px',
+              background: isDeviceOnline ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+              color: isDeviceOnline ? '#f59e0b' : '#94a3b8',
+              fontWeight: 600
+            }}
+          >
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            {isDeviceOnline ? (isVi ? 'Thiết bị ESP32: Trực tuyến' : 'ESP32: Online') : (isVi ? 'Thiết bị ESP32: Ngoại tuyến' : 'ESP32: Offline')}
+            {isDeviceOnline ? text.mqttPublicSignalActive : text.mqttPublicSignalInactive}
           </span>
         </div>
-        <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
-          {text.brokerNotice}
-        </span>
+        <div style={{ width: '100%', marginTop: '0.35rem', color: '#94a3b8', fontSize: '0.72rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <span>{text.brokerNotice}</span>
+          <span style={{ color: '#eab308' }}>{text.authenticityWarning}</span>
+        </div>
       </div>
+
+      {/* Cảnh báo chế độ chỉ xem qua kênh công khai */}
+      {isPublicPublishLocked && (
+        <div className="alert alert-warning" role="status" style={{ padding: '0.5rem 0.85rem', fontSize: '0.76rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.28)', color: '#fbbf24' }}>
+          <IconShield />
+          <span>{text.publicPublishLockedNotice}</span>
+        </div>
+      )}
 
       {/* Thông báo thao tác nếu có */}
       {notice && (
@@ -1250,6 +1162,8 @@ export default function SmartPlugOwnerArea() {
             type="button"
             className="btn btn-sm"
             onClick={handleResetOverload}
+            disabled={true}
+            title={text.publicPublishLockedNotice}
             style={{
               background: '#ef4444',
               color: '#ffffff',
@@ -1258,11 +1172,12 @@ export default function SmartPlugOwnerArea() {
               padding: '4px 12px',
               fontWeight: 600,
               fontSize: '0.76rem',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
+              cursor: 'not-allowed',
+              whiteSpace: 'nowrap',
+              opacity: 0.5
             }}
           >
-            {isVi ? 'Khôi phục an toàn' : 'Safe Reset'}
+            {isVi ? 'Khôi phục an toàn (Khóa)' : 'Safe Reset (Locked)'}
           </button>
         </div>
       )}
@@ -1275,9 +1190,9 @@ export default function SmartPlugOwnerArea() {
             <span className="apple-stat-label" style={{ margin: 0, fontWeight: 600 }}>{text.metricPower}</span>
           </div>
           <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
-            <span>Đèn LED: <strong style={{ color: isRelayOn ? '#10b981' : '#94a3b8' }}>{isRelayOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
+            <span>Đèn LED (phần mềm): <strong style={{ color: isRelayOn ? '#10b981' : '#94a3b8' }}>{isRelayOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
             <span style={{ color: '#475569' }}>|</span>
-            <span>Quạt 5V: <strong style={{ color: isFanOn ? '#10b981' : '#94a3b8' }}>{isFanOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
+            <span>Quạt 5V (phần mềm): <strong style={{ color: isFanOn ? '#10b981' : '#94a3b8' }}>{isFanOn ? 'BẬT (ON)' : 'TẮT (OFF)'}</strong></span>
           </div>
           <span style={{ fontSize: '0.72rem', color: '#94a3b8', maxWidth: '540px', lineHeight: 1.35 }}>
             {text.powerNotice}
@@ -1312,24 +1227,26 @@ export default function SmartPlugOwnerArea() {
           </div>
 
           <div className="apple-hero-actions">
-            {/* Nút Tự Động (Chỉ 1 chữ, không icon, hiệu ứng sáng mượt mà) */}
+            {/* Nút Tự Động (Chỉ xem - bị khóa) */}
             <button
               type="button"
               className={`apple-auto-btn ${isAutoLightMode ? 'active' : 'inactive'}`}
               onClick={handleToggleAuto}
-              title={isAutoLightMode ? (isVi ? 'Đang bật tự động (bấm để tắt)' : 'Auto enabled') : (isVi ? 'Bật chế độ tự động theo ánh sáng' : 'Enable auto mode')}
+              disabled={true}
+              style={{ opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.6)' }}
+              title={text.publicPublishLockedNotice}
             >
               {text.btnAuto}
             </button>
 
-            {/* Nút Bật / Tắt nguồn (Bị khóa không cho bấm khi đang ở chế độ Tự động) */}
+            {/* Nút Bật / Tắt nguồn (Chỉ xem - bị khóa) */}
             <button
               type="button"
-              disabled={isAutoLightMode}
+              disabled={true}
               onClick={handleToggleRelay}
               className={`btn ${isRelayOn ? 'btn-primary apple-power-btn on-light' : 'btn-outline apple-power-btn off'}`}
-              style={isAutoLightMode ? { opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.6)' } : undefined}
-              title={isAutoLightMode ? (isVi ? 'Đang ở chế độ tự động (tắt Tự động để bật/tắt thủ công)' : 'Auto mode active (disable Auto to control manually)') : undefined}
+              style={{ opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.6)' }}
+              title={text.publicPublishLockedNotice}
             >
               <IconPower />
               <span>{isRelayOn ? text.btnOff : text.btnOn}</span>
@@ -1356,7 +1273,10 @@ export default function SmartPlugOwnerArea() {
             <button
               type="button"
               onClick={handleToggleFan}
+              disabled={true}
+              style={{ opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.6)' }}
               className={`btn ${isFanOn ? 'btn-primary apple-power-btn on-fan' : 'btn-outline apple-power-btn off'}`}
+              title={text.publicPublishLockedNotice}
             >
               <IconFan spinning={isFanOn} />
               <span>{isFanOn ? text.fanOff : text.fanOn}</span>
@@ -1518,12 +1438,14 @@ export default function SmartPlugOwnerArea() {
               </button>
             </div>
 
-            {/* Nút Bắt Đầu Hẹn Giờ */}
+            {/* Nút Bắt Đầu Hẹn Giờ (Chỉ xem - bị khóa) */}
             <button
               type="button"
               className="ios-start-btn"
               onClick={handleStartTimer}
-              disabled={timerHours === 0 && timerMinutes === 0}
+              disabled={true}
+              style={{ opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(0.6)' }}
+              title={text.publicPublishLockedNotice}
             >
               <IconTimer />
               <span>{text.btnStartTimer}</span>

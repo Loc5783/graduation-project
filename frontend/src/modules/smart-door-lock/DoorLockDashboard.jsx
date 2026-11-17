@@ -25,6 +25,8 @@ export default function DoorLockDashboard() {
   const forcedOpen = data && typeof data.forcedOpen === 'boolean' ? data.forcedOpen : false;
   const heldOpen = data && typeof data.heldOpen === 'boolean' ? data.heldOpen : false;
   const alarm = data && typeof data.alarm === 'boolean' ? data.alarm : (forcedOpen || heldOpen);
+  const fingerprintOnline = typeof data?.fingerprintOnline === 'boolean' ? data.fingerprintOnline : null;
+  const fingerprintCount = typeof data?.fingerprintCount === 'number' ? data.fingerprintCount : null;
   const ageSeconds = device?.ageSeconds ?? null;
 
   return (
@@ -82,7 +84,7 @@ export default function DoorLockDashboard() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>{isEn ? 'Cannot load live device data. The last reading is no longer live.' : 'Không tải được dữ liệu trực tiếp. Số đo cuối không còn là dữ liệu mới.'}</span>
         </div>
       )}
 
@@ -185,6 +187,26 @@ export default function DoorLockDashboard() {
               {isLive
                 ? (isEn ? 'Broker: Mosquitto :1884' : 'Broker: Mosquitto :1884')
                 : (isEn ? 'Awaiting telemetry packet' : 'Đang đợi bản tin')}
+            </p>
+          </div>
+        </div>
+
+        <div className="door-kpi-card live-device-card">
+          <div className="door-kpi-header">
+            <span className="door-kpi-label">{isEn ? 'Fingerprint reader' : 'Đầu đọc vân tay'}</span>
+            <span className={`door-kpi-icon ${isLive && fingerprintOnline ? 'icon-success' : 'icon-neutral'}`} aria-hidden="true">◉</span>
+          </div>
+          <div className="door-kpi-body">
+            <div className="door-kpi-value">
+              {!isLive ? (isEn ? 'No live data' : 'Chưa có dữ liệu mới')
+                : fingerprintOnline === null ? (isEn ? 'Unknown' : 'Chưa rõ')
+                  : fingerprintOnline ? (isEn ? 'Connected' : 'Đã kết nối') : (isEn ? 'Disconnected' : 'Mất kết nối')}
+            </div>
+            <p className="door-kpi-hint">
+              {fingerprintCount === null
+                ? (isEn ? 'Authorized fingerprint count unavailable' : 'Chưa có số lượng vân tay được cấp quyền')
+                : (isEn ? `${fingerprintCount} authorized fingerprints` : `${fingerprintCount} vân tay được cấp quyền`)}
+              {!isLive ? (isEn ? ' · Last reading may be stale' : ' · Số đo cuối có thể đã cũ') : ''}
             </p>
           </div>
         </div>

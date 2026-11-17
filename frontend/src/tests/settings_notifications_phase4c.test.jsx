@@ -263,8 +263,8 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
       expect(cloned.quietHours.startTime).toBe('21:00');
       // allowUrgentBypass luôn luôn là true
       expect(cloned.quietHours.allowUrgentBypass).toBe(true);
-      // email luôn luôn là false
-      expect(cloned.channels.email).toBe(false);
+      // email boolean hợp lệ được giữ nguyên
+      expect(cloned.channels.email).toBe(true);
 
       // null input
       expect(cloneNotifications(null)).toBeNull();
@@ -339,7 +339,7 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
       // 5. HTTP 200 nhưng thiếu notifications -> Bất định
       expect(isUncertainServerResult({ success: true, status: 200, code: 'OK', data: {} })).toBe(true);
 
-      // 6. HTTP 200 nhưng notifications sai schema (ví dụ: email: true) -> Bất định
+      // 6. HTTP 200 nhưng notifications sai schema (email sai kiểu) -> Bất định
       expect(isUncertainServerResult({
         success: true,
         status: 200,
@@ -347,7 +347,7 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
         data: {
           notifications: {
             ...sampleNotifications,
-            channels: { inAppWeb: true, email: true }
+            channels: { inAppWeb: true, email: 'true' }
           }
         }
       })).toBe(true);
@@ -2337,7 +2337,7 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
       expect(hook.draft.types.unusualAccess).toBe(true);
     });
 
-    it('Biến thể 1 (Response email: true): HTTP 200 nhưng vi phạm hợp đồng email -> coi là chưa xác định -> bắt buộc đối chiếu GET trước khi PATCH tiếp', async () => {
+    it('Biến thể 1 (Response email sai kiểu): HTTP 200 nhưng vi phạm hợp đồng -> đối chiếu GET trước khi PATCH tiếp', async () => {
       let hook = null;
       const callOrder = [];
       let initialLogged = false;
@@ -2361,7 +2361,7 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
         root.render(<TestNotificationRouter onHookReady={(h) => { hook = h; }} />);
       });
 
-      // PATCH trả về HTTP 200 nhưng email: true (vi phạm hợp đồng giai đoạn này)
+      // PATCH trả về HTTP 200 nhưng email sai kiểu
       patchSpy.mockImplementationOnce(async (payload) => {
         callOrder.push(`PATCH-${payload.types?.unusualAccess}`);
         return {
@@ -2372,7 +2372,7 @@ describe('Giai đoạn 4C: Giao diện Cài đặt Thông báo và Tự lưu Th�
             notifications: {
               ...sampleNotifications,
               types: { ...sampleNotifications.types, unusualAccess: false },
-              channels: { inAppWeb: true, email: true }
+              channels: { inAppWeb: true, email: 'true' }
             }
           }
         };

@@ -1,7 +1,7 @@
 import { apiRequest } from './authService.js';
 
-export async function getMyDevices() {
-  return await apiRequest('/api/my-devices', { method: 'GET' });
+export async function getMyDevices(options = {}) {
+  return await apiRequest('/api/my-devices', { method: 'GET', ...options });
 }
 
 export async function claimDevice({ code, pairingSecret }) {
@@ -14,6 +14,21 @@ export async function claimDevice({ code, pairingSecret }) {
 
 export async function getDeviceShares(deviceId) {
   return await apiRequest(`/api/my-devices/${deviceId}/shares`, { method: 'GET' });
+}
+
+export async function getDeviceDetails(deviceId, options = {}) {
+  return await apiRequest(`/api/my-devices/${deviceId}`, { method: 'GET', ...options });
+}
+
+export async function getDeviceActivity(deviceId) {
+  return await apiRequest(`/api/my-devices/${deviceId}/activity`, { method: 'GET' });
+}
+
+export async function setDeviceCollection(deviceId, enabled) {
+  return await apiRequest(`/api/my-devices/${deviceId}/collection`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled })
+  });
 }
 
 export async function shareDevice(deviceId, email) {

@@ -22,6 +22,7 @@ export default function NotificationSettings({ onHookReady } = {}) {
     saveStatus,
     saveError,
     isPreview,
+    emailAvailable,
     updateLeafField,
     handleTimeInputChange,
     retrySave,
@@ -366,14 +367,14 @@ export default function NotificationSettings({ onHookReady } = {}) {
               </label>
             </div>
 
-            {/* Qua Email (Tắt & Disabled, Chưa khả dụng) */}
-            <div className="settings-switch-card" style={{ opacity: 0.75 }}>
+            {/* Email chỉ bật khi máy chủ đã cấu hình SMTP. */}
+            <div className="settings-switch-card" style={!emailAvailable ? { opacity: 0.75 } : undefined}>
               <div className="switch-content">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <label htmlFor={channelEmailId} className="switch-label">
                     {t('notif_channel_email')}
                   </label>
-                  <span
+                  {!emailAvailable && <span
                     className="badge-unavailable"
                     style={{
                       fontSize: '0.75rem',
@@ -385,7 +386,7 @@ export default function NotificationSettings({ onHookReady } = {}) {
                     }}
                   >
                     {t('notif_channel_unavailable')}
-                  </span>
+                  </span>}
                 </div>
                 <p className="switch-desc">{t('notif_channel_email_desc')}</p>
               </div>
@@ -394,9 +395,9 @@ export default function NotificationSettings({ onHookReady } = {}) {
                   type="checkbox"
                   id={channelEmailId}
                   className="switch-input"
-                  disabled={true}
-                  checked={false}
-                  onChange={() => {}}
+                  disabled={isBlocked || !emailAvailable}
+                  checked={draft.channels?.email ?? false}
+                  onChange={(e) => updateLeafField('channels.email', e.target.checked)}
                 />
                 <span className="switch-slider" aria-hidden="true"></span>
               </label>

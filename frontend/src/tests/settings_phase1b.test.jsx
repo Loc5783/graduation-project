@@ -1167,7 +1167,7 @@ describe('Giai đoạn 1B: Khung Cài đặt và Mục Giao diện', () => {
       expect(container.querySelector('.appearance-settings-page')).not.toBeNull();
     });
 
-    it('User thông thường: Sidebar chỉ hiển thị 6 mục, truy cập /settings/admin bị chặn 403', async () => {
+    it('User thông thường: Sidebar hiển thị 5 mục, truy cập /settings/admin bị chặn 403', async () => {
       const normalUser = { id: 'u1', name: 'Người Dùng Thường', email: 'user@example.com', role: 'member', owned: [] };
       vi.spyOn(authService, 'getMeService').mockResolvedValue({
         success: true,
@@ -1187,15 +1187,15 @@ describe('Giai đoạn 1B: Khung Cài đặt và Mục Giao diện', () => {
         root.render(<TestSettingsRouter initialEntry="/settings/admin" />);
       });
 
-      // Sidebar chỉ có 6 mục
+      // Quyền riêng tư có lối vào riêng, sidebar cài đặt chỉ có 5 mục.
       const navItems = container.querySelectorAll('.settings-nav-item');
-      expect(navItems.length).toBe(6);
+      expect(navItems.length).toBe(5);
 
       // Vùng nội dung báo không có quyền
       expect(container.textContent).toContain('Không có quyền truy cập khu vực quản trị');
     });
 
-    it('User Admin: Sidebar hiển thị đủ 7 mục và có quyền vào /settings/admin', async () => {
+    it('User Admin: Sidebar hiển thị 6 mục và có quyền vào /settings/admin', async () => {
       const adminUser = { id: 'admin1', name: 'Quản Trị Viên', email: 'admin@example.com', role: 'admin', owned: [] };
       vi.spyOn(authService, 'getMeService').mockResolvedValue({
         success: true,
@@ -1215,9 +1215,9 @@ describe('Giai đoạn 1B: Khung Cài đặt và Mục Giao diện', () => {
         root.render(<TestSettingsRouter initialEntry="/settings/admin" />);
       });
 
-      // Sidebar có đủ 7 mục
+      // Mục Quyền riêng tư đã tách ra khỏi sidebar cài đặt.
       const navItems = container.querySelectorAll('.settings-nav-item');
-      expect(navItems.length).toBe(7);
+      expect(navItems.length).toBe(6);
 
       // Vùng nội dung là placeholder Quản trị
       expect(container.textContent).toContain('Quản trị');

@@ -190,6 +190,11 @@ export default function Login() {
             </button>
           </div>
         )}
+        {serverNotice?.code === 'EMAIL_NOT_VERIFIED' && (
+          <Link to="/register" state={{ verificationEmail: formData.email.trim().toLowerCase() }} className="au-link">
+            {t('verify_email_title')}
+          </Link>
+        )}
 
         {/* Thông báo hướng dẫn Quên mật khẩu */}
         {showForgotNotice && (

@@ -1,0 +1,7 @@
+.activity-page { width: min(100%, 1100px); margin: 0 auto; display: grid; gap: 1.4rem; padding-bottom: 2rem; }
+.activity-page-heading { padding: 0.25rem 0 0.5rem; }
+.activity-page-eyebrow { display: block; color: var(--color-primary); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.1em; margin-bottom: 0.35rem; }
+.activity-page-heading h1 { color: var(--color-text-main); font-size: clamp(1.55rem, 3vw, 2rem); line-height: 1.25; margin-bottom: 0.35rem; }
+.activity-page-heading p { color: var(--color-text-muted); max-width: 65ch; }
+.activity-page .activity-log-panel { margin-top: 0; }
+.activity-page .security-settings-container { margin-top: 0; }

@@ -3,6 +3,7 @@ import { normalizeLiveDevices } from '../routes/liveDeviceRoutes.js';
 import User from '../models/User.js';
 import RegisteredDevice from '../models/RegisteredDevice.js';
 import { dispatchNotification } from './notificationService.js';
+import { readingBelongsToCurrentTenure } from './deviceTenure.js';
 
 const DEVICE_HISTORY_DAYS = 30;
 const DAY_MS = 86400000;
@@ -55,13 +56,17 @@ export function createDeviceObserver({ fetchImpl = globalThis.fetch, gatewayUrl 
       const devices = normalizeLiveDevices(JSON.parse(text));
       const observedAt = now();
       for (const item of devices) {
-        const fingerprint = JSON.stringify([item.fresh, item.brokerConnected, item.data]);
+        const reg = await RegisteredDevice.findOne({ deviceId: item.id }).select('ownerUserId viewerUserIds ownershipEpoch collectionEnabled claimedAt').lean();
+        if (!reg?.ownerUserId || reg.collectionEnabled === false || !readingBelongsToCurrentTenure(item, reg, observedAt.getTime())) {
+          lastWritten.delete(item.id);
+          continue;
+        }
+        const fingerprint = JSON.stringify([item.fresh, item.brokerConnected, item.data, reg?.ownershipEpoch ?? null]);
         const prior = lastWritten.get(item.id);
         // Write transitions and changed readings immediately. Repeat unchanged states
         // at most once per minute, preserving enough points for historical charts.
         if (prior?.fingerprint === fingerprint && observedAt.getTime() - prior.at < 60000) continue;
         if (!item.fresh && !prior) continue; // No history exists for an unseen device.
-        const reg = await RegisteredDevice.findOne({ deviceId: item.id }).select('ownerUserId viewerUserIds ownershipEpoch').lean();
         await DeviceObservation.create({ deviceId: item.id, observedAt,
           expiresAt: new Date(observedAt.getTime() + DEVICE_HISTORY_DAYS * DAY_MS),
           fresh: item.fresh, brokerConnected: item.brokerConnected, data: item.data,

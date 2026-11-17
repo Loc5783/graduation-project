@@ -4,9 +4,13 @@ import MongoStore from 'connect-mongo';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import User from './models/User.js';
 import UserSession from './models/UserSession.js';
 import Notification from './models/Notification.js';
+import EmailAlert from './models/EmailAlert.js';
 import { parseAllowedOrigins } from './middleware/csrf.js';
 import { createAuthRouter } from './routes/authRoutes.js';
 import { createSettingsRouter } from './routes/settingsRoutes.js';
@@ -19,10 +23,15 @@ import { createPrivacyDataRouter } from './routes/privacyDataRoutes.js';
 import { createDeviceHistoryRouter } from './routes/deviceHistoryRoutes.js';
 import DeviceObservation from './models/DeviceObservation.js';
 import RegisteredDevice from './models/RegisteredDevice.js';
+import ActivityLog from './models/ActivityLog.js';
 import { createMyDeviceRouter } from './routes/myDeviceRoutes.js';
 import { EnvironmentSensorTelemetry } from '../modules/environment-sensor/telemetry.js';
 import { createEnvironmentSensorRouter } from '../modules/environment-sensor/router.js';
 import { smartPlugRoutes } from '../modules/smart-plug/smartPlugRoutes.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const releaseApkPath = path.resolve(__dirname, '../../mobile/android/app/build/outputs/apk/release/app-release.apk');
 
 /**
  * Khởi tạo ứng dụng Express và cấu hình các middleware an toàn
@@ -107,8 +116,10 @@ export async function createApp(options = {}) {
 
     try {
       await Notification.init();
+      await EmailAlert.init();
       await DeviceObservation.init();
       await RegisteredDevice.init();
+      await ActivityLog.init();
       console.log('[Database] Chỉ mục Notification đã sẵn sàng.');
     } catch (indexError) {
       throw new Error(`Khởi tạo chỉ mục Notification thất bại: ${indexError.message}`);
@@ -152,6 +163,24 @@ export async function createApp(options = {}) {
       }
     })
   );
+
+  // Endpoint kiểm tra sức khỏe máy chủ công khai (dùng cho mobile app kiểm tra kết nối)
+  app.get('/api/health', (req, res) => {
+    res.json({
+      success: true,
+      status: 'UP',
+      time: new Date().toISOString()
+    });
+  });
+
+  // Endpoint tải trực tiếp file APK Release cài đặt cho điện thoại qua Wi-Fi
+  app.get('/download-app', (req, res) => {
+    if (fs.existsSync(releaseApkPath)) {
+      res.download(releaseApkPath, 'SmartHome.apk');
+    } else {
+      res.status(404).json({ success: false, message: 'APK Release chưa được tạo trên máy chủ.' });
+    }
+  });
 
   // 5. Mount các route xác thực
   const authRouter = options.authRouter || createAuthRouter(options);

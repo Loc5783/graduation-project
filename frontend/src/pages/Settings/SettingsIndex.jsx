@@ -10,7 +10,6 @@ export const SETTINGS_SECTIONS = [
   { id: 'account', icon: '👤', titleKey: 'settings_cat_account', descKey: 'settings_cat_account_desc' },
   { id: 'security', icon: '🛡️', titleKey: 'settings_cat_security', descKey: 'settings_cat_security_desc' },
   { id: 'notifications', icon: '🔔', titleKey: 'settings_cat_notifications', descKey: 'settings_cat_notifications_desc' },
-  { id: 'privacy', icon: '🔒', titleKey: 'settings_cat_privacy', descKey: 'settings_cat_privacy_desc' },
   { id: 'admin', icon: '⚙️', titleKey: 'settings_cat_admin', descKey: 'settings_cat_admin_desc', adminOnly: true },
   { id: 'help', icon: '❓', titleKey: 'settings_cat_help', descKey: 'settings_cat_help_desc' }
 ];

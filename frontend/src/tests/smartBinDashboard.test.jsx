@@ -111,6 +111,16 @@ describe('Smart Trash Bin Dashboard Tests', () => {
     expect(host.textContent).toContain('AUTO');
   });
 
+  it('hiển thị nội dung cảnh báo khi gateway trả trạng thái lỗi dạng boolean', () => {
+    mockLiveDevicesData.error = true;
+    act(() => {
+      root.render(<SmartBinDashboard />);
+    });
+    const banner = host.querySelector('.bin-dash-banner');
+    expect(banner).not.toBeNull();
+    expect(banner.textContent).toContain('Không tải được dữ liệu trực tiếp');
+  });
+
   it('2. Khi cảm biến siêu âm lỗi (sensorOk=false), KHÔNG biến thành 0%, hiển thị Không đọc được', () => {
     mockLiveDevicesData = {
       devices: [

@@ -15,7 +15,8 @@ const schema = new mongoose.Schema({
   viewerUserIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
   customName: { type: String, default: null, trim: true, maxlength: 50 },
   claimedAt: { type: Date, default: null },
-  ownershipEpoch: { type: Number, default: 0 }
+  ownershipEpoch: { type: Number, default: 0 },
+  collectionEnabled: { type: Boolean, default: true }
 }, { timestamps: true, collection: 'registered_devices' });
 
 schema.index({ code: 1 }, { unique: true });

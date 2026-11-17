@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import requireAuth from '../middleware/auth.js';
-import { getAccessibleDeviceIds, getDeviceAccess } from '../services/deviceAccess.js';
+import { getAccessibleDeviceIds, getDeviceAccess, hasDeviceView } from '../services/deviceAccess.js';
+import RegisteredDevice from '../models/RegisteredDevice.js';
+import { recordDeviceRead, recordDeniedDeviceRead } from '../services/deviceDataAudit.js';
+import { readingBelongsToCurrentTenure } from '../services/deviceTenure.js';
 
 export const LIVE_DEVICE_FIELDS = Object.freeze({
-  'smart-door-lock': ['doorOpen', 'boltCommand', 'boltCommandCompleted', 'boltFeedbackAvailable', 'forcedOpen', 'heldOpen', 'tamper', 'alarm', 'wifiRssi', 'rssi'],
+  'smart-door-lock': ['doorOpen', 'boltCommand', 'boltCommandCompleted', 'boltFeedbackAvailable', 'forcedOpen', 'heldOpen', 'tamper', 'alarm', 'fingerprintOnline', 'fingerprintBusy', 'fingerprintCount', 'wifiRssi', 'rssi'],
   'window-sensor': ['doorOpen', 'state', 'motion', 'alarm', 'alarmReason', 'rssi', 'wifiRssi'],
   'smart-bin': ['sensorOk', 'distanceCm', 'fillPercent', 'lidOpen', 'mode'],
   'environment-sensor': ['temperature', 'humidity', 'gasRaw', 'alertLevel', 'alertLevelText', 'isWarmingUp', 'buzzerOn', 'sensorOk', 'dhtOk', 'wifiRssi'],
@@ -61,6 +64,26 @@ export function createLiveDeviceRouter({
       if (text.length > 128000) throw new Error('INVALID_GATEWAY_RESPONSE');
       const allDevices = normalizeLiveDevices(JSON.parse(text));
       const devices = allDevices.filter((d) => allowedIds.has(d.id));
+      if (req.user?._id) {
+        const registrations = await RegisteredDevice.find({ deviceId: { $in: devices.map(d => d.id) } }).lean();
+        const byId = new Map(registrations.map(doc => [doc.deviceId, doc]));
+        for (const item of devices) {
+          const registration = byId.get(item.id);
+          if (!hasDeviceView(registration, req.user._id) || registration.collectionEnabled === false) {
+            item.data = null;
+            item.fresh = false;
+            item.collectionEnabled = false;
+          } else if (!readingBelongsToCurrentTenure(item, registration)) {
+            item.data = null;
+            item.fresh = false;
+            item.collectionEnabled = true;
+            item.awaitingNewReading = true;
+          } else {
+            item.collectionEnabled = true;
+            if (item.data) await recordDeviceRead({ device: registration, actorId: req.user._id, source: 'live' });
+          }
+        }
+      }
       res.json({ success: true, data: { devices, checkedAt: new Date().toISOString() } });
     } catch {
       res.status(503).json({ success: false, code: 'GATEWAY_UNAVAILABLE', message: 'Gateway chưa kết nối hoặc phản hồi không hợp lệ.' });
@@ -76,8 +99,13 @@ export function createLiveDeviceRouter({
         : { canView: process.env.NODE_ENV === 'test' && !req.user ? true : false, device: null };
 
       if (!access.canView) {
+        if (req.user?._id) await recordDeniedDeviceRead({ device: access.device, actorId: req.user._id, source: 'speaker-history' });
         return res.status(403).json({ success: false, code: 'FORBIDDEN', message: 'Bạn không có quyền xem dữ liệu loa thông minh.' });
       }
+      if (access.device?.collectionEnabled === false) {
+        return res.json({ success: true, data: { history: [], collectionEnabled: false } });
+      }
+      if (req.user?._id) await recordDeviceRead({ device: access.device, actorId: req.user._id, source: 'speaker-history' });
 
       // Cách ly dữ liệu theo lần sở hữu: Gateway lưu tập tin cục bộ không có định danh lần sở hữu tin cậy.
       // Khi thiết bị đã đổi chủ (ownershipEpoch > 1), tạm ẩn lịch sử cũ để bảo vệ quyền riêng tư của chủ trước.
